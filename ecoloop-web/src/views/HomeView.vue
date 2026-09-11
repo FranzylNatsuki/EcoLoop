@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import PageLayout from '../components/layout/PageLayout.vue'
-import AppHeader from '../components/layout/AppHeader.vue'
 import CategoryBar from '../components/layout/CategoryBar.vue'
 import CreatePostBar from '../components/posts/CreatePostBar.vue'
 import PostCard from '../components/posts/PostCard.vue'
@@ -14,7 +13,6 @@ const currentUserAvatar = 'https://placehold.co/38x38'
 
 <template>
 	<div>
-		<AppHeader />
 		<CategoryBar />
 
 		<PageLayout>
