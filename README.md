@@ -56,8 +56,7 @@ npm run dev
 `src/components/sidebar` *homepage sidebar components*
 * CommunityRules.vue - community guidelines
 * EventPreview.vue - highlights upcoming event
-* TrendingTopics.vue - list of #s
-`events
+* TrendingTopics.vue - list of #'s events
 
 `src/components/events` *event page contents*
 * AboutProjectCard.vue
