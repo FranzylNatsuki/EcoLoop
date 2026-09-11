@@ -1,7 +1,6 @@
 <script setup lang="ts">
 
 import '../events.css'
-import AppHeader from '../components/layout/AppHeader.vue'
 import EventHero from '../components/events/EventHero.vue'
 import MaterialsNeededCard from '../components/events/MaterialsNeededCard.vue'
 import EventStats from '../components/events/EventStats.vue'
