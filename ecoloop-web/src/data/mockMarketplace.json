@@ -1,0 +1,62 @@
+[
+  {
+    "id": 1,
+    "title": "Reclaimed Oak Planks — 24 pieces",
+    "price": "$45",
+    "isBarter": false,
+    "condition": "Good",
+    "seller": "u/woodworker_dan",
+    "location": "Portland, OR",
+    "image": "https://placehold.co/289x190"
+  },
+  {
+    "id": 2,
+    "title": "Vintage Glass Bottles Collection",
+    "price": "Free",
+    "isBarter": false,
+    "condition": "Like New",
+    "seller": "u/glass_collector",
+    "location": "Seattle, WA",
+    "image": "https://placehold.co/289x190"
+  },
+  {
+    "id": 3,
+    "title": "Stripped Copper Wire — 15 lbs",
+    "price": "Trade",
+    "isBarter": true,
+    "condition": "Good",
+    "seller": "u/metal_reclaimer",
+    "location": "Austin, TX",
+    "image": "https://placehold.co/289x190"
+  },
+  {
+    "id": 4,
+    "title": "Upcycled Pallet Coffee Table",
+    "price": "$120",
+    "isBarter": false,
+    "condition": "Like New",
+    "seller": "u/diy_maker_girl",
+    "location": "Denver, CO",
+    "image": "https://placehold.co/289x190"
+  },
+  {
+    "id": 5,
+    "title": "Salvaged Barn Door",
+    "price": "$85",
+    "isBarter": false,
+    "condition": "Fair",
+    "seller": "u/barn_reclaimer",
+    "location": "Nashville, TN",
+    "image": "https://placehold.co/289x190"
+  },
+  {
+    "id": 6,
+    "title": "Mixed Metal Scraps Lot",
+    "price": "$20",
+    "isBarter": false,
+    "condition": "Fair",
+    "seller": "u/scrapper_steve",
+    "location": "Chicago, IL",
+    "image": "https://placehold.co/289x190"
+  }
+]
