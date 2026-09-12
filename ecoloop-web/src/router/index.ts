@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import EventsView from '../views/EventsView.vue'
 import MarketplaceView from '../views/MarketplaceView.vue'
+import PostDetailView from '../views/PostDetailView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -28,6 +29,11 @@ const router = createRouter({
       name: 'marketplace',
       component: MarketplaceView,
     },
+    {
+      path: '/post/:id',
+      name: 'post-detail',
+      component: PostDetailView,
+    }
   ],
 })
 
