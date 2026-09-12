@@ -4,10 +4,11 @@ CCS6 Sourcecode
 
 Codebase for EcoLoop website for CCS-6. Full techstack specifications:
 * Frontend built in Vue.js and managed with npm
-* ASP.net backend
-* REST API connection to Database
-* AzureSQL
-* Azure Web Services Cloud Hosting
+* ASP.net C# backend
+* Supabase DBMs
+* Supabase File Storage
+* MonsterASP backend hosting
+* Vercel / Cloudflare pages Vue Server
 
 ## Frontend: ecoloop-web
 
@@ -70,11 +71,19 @@ npm run dev
 * RecentDonationsCard.vue
 * RelatedEventsCard.vue
 
+`src/components/marketplace` *marketplace contents*
+* MarketplaceCard.vue - item container
+* Popular CategoriesCard.vue
+
 `src/views` *individual pages*
 * HomeView.vue - home page component
 * EventsView.vue - events page component
 
 `src/assets` *contains logos / images*
+
+`src/types` *object type definitions*
+
+
 
 ### Router (IMPORTANT!)
 Router defines the locators for the view controller (which page is loaded, refer to examples of how `<RouterLink to="">` is used in my examples e.g.: `CreatePostButton.vu`). *New Pages* require to be defined in the router and must be addressed using RouterLink as href. It is located in `src/router`. Edit `index.ts`.
@@ -96,6 +105,11 @@ This contains the list of views:
       path: '/events',
       name: 'events',
       component: EventsView,
+    },
+    {
+      path: '/marketplace',
+      name: 'marketplace',
+      component: MarketplaceView,
     },
   ],
 ```
