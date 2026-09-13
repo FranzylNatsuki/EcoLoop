@@ -1,7 +1,7 @@
 [
   {
     "id": 1,
-    "title": "Looking for old glass for outdoor potting project",
+    "title": "Looking for old glass jars for outdoor potting project",
     "body": "I used simple cotton twine as a wick and some gravel at the bottom. Growing mint, basil, and cilantro on my kitchen sill now! Let me know if you want the full step-by-step assembly guide.",
     "image": "https://placehold.co/617x320",
     "votes": 421,
@@ -9,35 +9,35 @@
     "category": "Upcycling",
     "createdAt": "2h ago",
     "author": {
-      "name": "user",
+      "name": "GreenThumb_Maya",
       "avatar": "https://placehold.co/24x24"
     }
   },
   {
-    "id": 1,
-    "title": "Looking for old glass for outdoor potting project",
-    "body": "I used simple cotton twine as a wick and some gravel at the bottom. Growing mint, basil, and cilantro on my kitchen sill now! Let me know if you want the full step-by-step assembly guide.",
+    "id": 2,
+    "title": "Need leftover cardboard boxes for community garden mulch",
+    "body": "We are setting up sheet mulch beds for the local school garden this weekend. Looking for unprinted corrugated cardboard. Willing to pick up anywhere within the city center!",
     "image": "https://placehold.co/617x320",
-    "votes": 421,
-    "comments": 54,
-    "category": "Upcycling",
-    "createdAt": "2h ago",
+    "votes": 189,
+    "comments": 19,
+    "category": "Gardening",
+    "createdAt": "5h ago",
     "author": {
-      "name": "user",
+      "name": "EcoWarrior_Dan",
       "avatar": "https://placehold.co/24x24"
     }
   },
   {
-    "id": 1,
-    "title": "Looking for old glass for outdoor potting project",
-    "body": "I used simple cotton twine as a wick and some gravel at the bottom. Growing mint, basil, and cilantro on my kitchen sill now! Let me know if you want the full step-by-step assembly guide.",
+    "id": 3,
+    "title": "Turned discarded wooden pallets into a vertical herb planter!",
+    "body": "Sanded down two old shipping pallets, sealed them with non-toxic linseed oil, and mounted them on our balcony wall. Fits over 12 small potted herbs cleanly.",
     "image": "https://placehold.co/617x320",
-    "votes": 421,
-    "comments": 54,
-    "category": "Upcycling",
-    "createdAt": "2h ago",
+    "votes": 853,
+    "comments": 92,
+    "category": "DIY Crafting",
+    "createdAt": "1d ago",
     "author": {
-      "name": "user",
+      "name": "CraftyElena",
       "avatar": "https://placehold.co/24x24"
     }
   }
