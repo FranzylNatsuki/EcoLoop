@@ -3,18 +3,14 @@ import { ref, computed } from 'vue'
 import DonateMaterialsModal from '../Modals/DonateMaterialsModal.vue'
 
 export interface Material {
-  id?: number | string
+  id: string | number
   name: string
-  // Optional status property (e.g. 'Available', 'Fulfilled', 'Needed')
-  status?: string
-  // Extra tracking properties made optional
-  subtitle?: string
-  quantity?: string
-  current?: number
-  total?: number
-  unitLabel?: string
-  category?: string
-  isAvailable?: boolean
+  subtitle: string
+  current: number
+  total: number
+  unitLabel: string
+  progressRatioLabel: string
+  isFulfilled: boolean
 }
 
 const props = defineProps<{ material: Material }>()
