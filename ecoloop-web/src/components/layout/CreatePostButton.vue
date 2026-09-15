@@ -1,28 +1,30 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { ref } from 'vue'
+import { usePosts } from '../../composables/usePosts'
+import CreatePostModal from '../Modals/CreatePost.vue'
 
-interface Props {
-  label?: string
-  to?: string | object
+const showCreateModal = ref(false)
+const { addPost } = usePosts()
+
+function handlePostCreated(postData: { category: string; title: string; description: string; images: string[] }) {
+  addPost(postData)
+  showCreateModal.value = false
 }
-
-withDefaults(defineProps<Props>(), {
-  label: 'Create Post',
-  to: '/'
-})
 </script>
-
 <template>
-  <RouterLink :to="to" class="btn-create-post">
+  <button type="button" class="btn-create-post" @click="showCreateModal = true">
     <span class="icon-wrapper">
-      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M2.9162 7H11.0838M7 2.9162V11.0838" stroke="white" stroke-width="2" stroke-linecap="round"/>
       </svg>
     </span>
-    <span class="btn-text">
-      <slot>{{ label }}</slot>
-    </span>
-  </RouterLink>
+    <span class="btn-text">Create Post</span>
+  </button>
+
+  <CreatePostModal
+    v-model="showCreateModal"
+    @created="handlePostCreated"
+  />
 </template>
 
 <style scoped>
@@ -37,7 +39,7 @@ withDefaults(defineProps<Props>(), {
   gap: 8px;
   cursor: pointer;
   transition: background-color 0.2s ease;
-  text-decoration: none; /* Added to prevent link underline */
+  text-decoration: none;
 }
 
 .btn-create-post:hover {

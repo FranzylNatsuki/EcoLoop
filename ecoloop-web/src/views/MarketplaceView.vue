@@ -4,6 +4,7 @@ import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
 import PopularCategoriesCard from '../components/marketplace/PopularCategoriesCard.vue'
 import type { Listing } from '../types/marketplace'
 import mockListingsData from '../data/mockMarketplace.json'
+import BackButton from '../components/common/BackButton.vue'
 
 const activeCategory = ref('All Materials')
 const categories = ['All Materials', 'Wood', 'Glass', 'Metal', 'Plastic', 'Tires', 'Fabric', 'Electronics']
@@ -35,6 +36,7 @@ onMounted(() => {
     <!-- Main Content & Sidebar Grid -->
     <div class="page-layout">
       <main class="page-content">
+        <BackButton />
         <div class="intro-banner">
           <h2>♻️ Community Circular Marketplace</h2>
           <p>

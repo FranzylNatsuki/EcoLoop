@@ -1,6 +1,7 @@
 <script setup lang="ts">
 
 import '../events.css'
+import BackButton from '../components/common/BackButton.vue'
 import EventHero from '../components/events/EventHero.vue'
 import MaterialsNeededCard from '../components/events/MaterialsNeededCard.vue'
 import EventStats from '../components/events/EventStats.vue'
@@ -15,6 +16,7 @@ import RelatedEventsCard from '../components/events/RelatedEventsCard.vue'
 <template>
   <main class="events-page">
 
+    <BackButton />
     <EventHero />
 
     <MaterialsNeededCard />

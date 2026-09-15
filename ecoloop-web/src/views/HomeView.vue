@@ -6,7 +6,9 @@ import PostCard from '../components/posts/PostCard.vue'
 import CommunityRules from '../components/sidebar/CommunityRules.vue'
 import TrendingTopics from '../components/sidebar/TrendingTopics.vue'
 import EventPreview from '../components/sidebar/EventPreview.vue'
-import posts from '../data/mockPosts.json'
+import { usePosts } from '../composables/usePosts'
+
+const { posts } = usePosts()
 
 const currentUserAvatar = 'https://placehold.co/38x38'
 </script>
