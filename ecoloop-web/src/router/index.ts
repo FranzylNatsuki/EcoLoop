@@ -20,8 +20,8 @@ const router = createRouter({
       component:HomeView,
     },
     {
-      path: '/events',
-      name: 'events',
+      path: '/events/:id',
+      name: 'event-detail',
       component: EventsView,
     },
     {
