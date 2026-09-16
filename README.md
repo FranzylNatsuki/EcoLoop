@@ -158,3 +158,13 @@ This contains the list of views:
 `EcoLoop.Api.csproj/`
 `EcoLoop.Api.http/`
 `Program.cs`
+
+### Supabase x C#
+
+1.
+
+`dotnet user-secrets set "Supabase:Url" "https://xxxx.supabase.co"`
+
+2.
+
+`dotnet user-secrets set "Supabase:SecretKey" "xxxx"`

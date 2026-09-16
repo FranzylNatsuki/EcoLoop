@@ -29,4 +29,12 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+app.MapGet("/test-db", async (IHttpClientFactory factory) =>
+{
+    var client = factory.CreateClient("Supabase");
+    var res = await client.GetAsync("/rest/v1/your_table_name?select=*");
+    var body = await res.Content.ReadAsStringAsync();
+    return Results.Content(body, "application/json");
+});
+
 app.Run();
