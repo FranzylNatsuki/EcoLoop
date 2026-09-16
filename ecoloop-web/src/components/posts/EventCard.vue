@@ -1,18 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { EventItem } from '../../types/event'
+import { useRouter } from 'vue-router'
 
-export interface EventItem {
-  type: 'event'
-  id: number | string
-  org_id?: string
-  event_title: string
-  schedule: string
-  location: string
-  description: string
-  participant_goal: number | string
-  images?: string[]
-  category?: string
-  attendees_count?: number
+const router = useRouter()
+function goToEvent() {
+  router.push(`/events/${props.event.id}`)
 }
 
 const props = defineProps<{
@@ -49,7 +42,7 @@ function handleShare() {
 </script>
 
 <template>
-  <article class="event-card">
+    <article class="event-card" @click="goToEvent">
 
     <!-- Top Header: Type Tag & Category -->
     <div class="card-header">
@@ -70,7 +63,7 @@ function handleShare() {
         </span>
       </div>
 
-      <button type="button" class="share-btn" @click="handleShare" aria-label="Share event">
+      <button type="button" class="share-btn" @click.stop="handleShare" aria-label="Share event">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="18" cy="5" r="3" />
           <circle cx="6" cy="12" r="3" />
@@ -135,14 +128,14 @@ function handleShare() {
 
     <!-- Footer Action -->
     <div class="card-footer">
-      <button type="button" class="join-btn" @click="handleJoin">
+        <button type="button" class="join-btn" @click="goToEvent">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
           <circle cx="8.5" cy="7" r="4" />
           <line x1="20" y1="8" x2="20" y2="14" />
           <line x1="23" y1="11" x2="17" y2="11" />
         </svg>
-        <span>RSVP / Join Event</span>
+        <span> Join Event </span>
       </button>
     </div>
 
@@ -317,5 +310,19 @@ function handleShare() {
 
 .join-btn:hover {
   background: #65732a;
+}
+
+.event-card {
+  width: 100%;
+  background: #ffffff;
+  border: 1px solid #e4e7e3;
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0px 4px 16px rgba(26, 29, 26, 0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
 }
 </style>

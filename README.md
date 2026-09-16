@@ -30,7 +30,7 @@ npm install
 
 3. run the json posts updater service
 ```bash
-npx json-server --port 3001 src/data/mockPosts.json
+npx json-server --port 3001 src/data/db.json
 ```
 
 4. run in dev mode and copy paste link (Localhost)
