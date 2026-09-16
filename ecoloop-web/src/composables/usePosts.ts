@@ -5,6 +5,20 @@ export interface Author {
   avatar: string
 }
 
+export interface MaterialItem {
+  id: string | number
+  name: string
+  quantity: number | string
+  unit: string
+  description: string
+}
+
+export interface EventDetails {
+  date: string
+  time: string
+  location: string
+}
+
 export interface Post {
   id: number
   title: string
@@ -15,6 +29,17 @@ export interface Post {
   category: string
   createdAt: string
   author: Author
+  eventDetails?: EventDetails
+  materials?: MaterialItem[]
+}
+
+export interface CreatePostPayload {
+  category: string
+  title: string
+  description: string
+  images: string[]
+  eventDetails?: EventDetails
+  materials?: MaterialItem[]
 }
 
 const posts = ref<Post[]>([])
@@ -31,7 +56,7 @@ export function usePosts() {
     }
   }
 
-  async function addPost(newPostData: { category: string; title: string; description: string; images: string[] }) {
+  async function addPost(newPostData: CreatePostPayload) {
     const newPost: Omit<Post, 'id'> = {
       title: newPostData.title,
       body: newPostData.description,
@@ -43,7 +68,9 @@ export function usePosts() {
       author: {
         name: 'FranzyllTheory',
         avatar: 'https://placehold.co/24x24'
-      }
+      },
+      ...(newPostData.eventDetails && { eventDetails: newPostData.eventDetails }),
+      ...(newPostData.materials && { materials: newPostData.materials })
     }
 
     try {

@@ -42,10 +42,19 @@ function selectMaterial(material: string) {
   isSelectOpen.value = false
 }
 
+const emit = defineEmits<{
+  (e: 'submitted', payload: { quantity: number; materialName: string }): void
+}>()
+
 function handleSubmit() {
-  // Handle donation submission logic here
+  emit('submitted', {
+    quantity: quantity.value,
+    materialName: selectedMaterial.value
+  })
   isOpen.value = false
 }
+
+
 </script>
 
 <template>

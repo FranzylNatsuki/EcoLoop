@@ -55,6 +55,21 @@
         "avatar": "https://placehold.co/24x24"
       },
       "id": "vaUFi64cRsI"
+    },
+    {
+      "title": "Zachary",
+      "body": "esmeringkokiks",
+      "image": "https://placehold.co/617x320",
+      "votes": 1,
+      "comments": 0,
+      "category": "Upcycling",
+      "createdAt": "Just now",
+      "author": {
+        "name": "FranzyllTheory",
+        "avatar": "https://placehold.co/24x24"
+      },
+      "id": "Auxi1xis7c8"
     }
-  ]
+  ],
+  "$schema": "./node_modules/json-server/schema.json"
 }

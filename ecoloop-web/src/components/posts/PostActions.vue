@@ -3,19 +3,49 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { MessageCircle, Share2, Bookmark } from 'lucide-vue-next'
 import DonateMaterialsModal from '../Modals/DonateMaterialsModal.vue'
+import ThankYouDonationModal from '../Modals/ThankYouDonationModal.vue'
 
 const props = defineProps<{
   comments: number
   postId?: string | number
   hideComments?: boolean
+  projectName?: string
+  authorUsername?: string
 }>()
 
 defineEmits<{ share: []; save: []; donate: []; map: [] }>()
 
 const router = useRouter()
+
+// Modal Visibility Controls
 const showDonateModal = ref(false)
+const showThankYouModal = ref(false)
+
+// Donation Summary State
+const donationSummary = ref({
+  quantity: 1,
+  materialName: 'Materials'
+})
 
 function openPost() {
+  if (props.postId) {
+    router.push(`/post/${props.postId}`)
+  }
+}
+
+// Called when DonateMaterialsModal emits 'submitted'
+function handleDonationSubmitted(payload: { quantity: number; materialName: string }) {
+  donationSummary.value = payload
+  showDonateModal.value = false
+  showThankYouModal.value = true
+}
+
+// Router actions for ThankYou modal callbacks
+function handleViewDonations() {
+  router.push('/profile') // Adjust to your preferred route (e.g. '/donations' or '/profile')
+}
+
+function handleBackToPost() {
   if (props.postId) {
     router.push(`/post/${props.postId}`)
   }
@@ -45,7 +75,22 @@ function openPost() {
       Donate
     </button>
 
-    <DonateMaterialsModal v-model="showDonateModal" />
+    <!-- Step 1: Donation Form Modal -->
+    <DonateMaterialsModal
+      v-model="showDonateModal"
+      @submitted="handleDonationSubmitted"
+    />
+
+    <!-- Step 2: Thank You Confirmation Modal -->
+    <ThankYouDonationModal
+      v-model="showThankYouModal"
+      :quantity="donationSummary.quantity"
+      :material-name="donationSummary.materialName"
+      :project-name="props.projectName"
+      :author-username="props.authorUsername"
+      @view-donations="handleViewDonations"
+      @back-to-post="handleBackToPost"
+    />
   </div>
 </template>
 

@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { usePosts } from '../../composables/usePosts'
-import CreatePostModal from '../Modals/CreatePost.vue'
+import { usePosts, type CreatePostPayload } from '../../composables/usePosts'
+import CreateChooserModal from '../Modals/CreateChooserModal.vue'
 
 const showCreateModal = ref(false)
 const { addPost } = usePosts()
 
-function handlePostCreated(postData: { category: string; title: string; description: string; images: string[] }) {
-  addPost(postData)
+function handlePublishEvent(payload: CreatePostPayload) {
+  addPost(payload)
+  showCreateModal.value = false
+}
+
+function handleSelectCause() {
+  // Handle direct cause creation if needed or open cause flow
   showCreateModal.value = false
 }
 </script>
+
 <template>
   <button type="button" class="btn-create-post" @click="showCreateModal = true">
     <span class="icon-wrapper">
@@ -21,9 +27,11 @@ function handlePostCreated(postData: { category: string; title: string; descript
     <span class="btn-text">Create Post</span>
   </button>
 
-  <CreatePostModal
+  <!-- Replaced wizard with the entry point of your import chain -->
+  <CreateChooserModal
     v-model="showCreateModal"
-    @created="handlePostCreated"
+    @select-cause="handleSelectCause"
+    @publish="handlePublishEvent"
   />
 </template>
 
