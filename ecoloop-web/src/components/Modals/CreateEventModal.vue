@@ -19,6 +19,9 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 // Chain state (Link 2 -> Link 3)
 const isMaterialsModalOpen = ref(false)
 const draftEventData = ref<any>({})
+const emit = defineEmits<{
+ (e: 'publish', payload: { event: any; materials: any[] }): void
+}>()
 
 // Form state
 const formData = ref({
@@ -79,6 +82,10 @@ function handleSubmit() {
   // Hide current modal and trigger next step in chain
   isOpen.value = false
   isMaterialsModalOpen.value = true
+}
+
+function handleMaterialsPublish(payload: { event: any; materials: any[] }) {
+  emit('publish', payload)
 }
 </script>
 
@@ -271,6 +278,7 @@ function handleSubmit() {
   <RequestMaterialsModal
     v-model="isMaterialsModalOpen"
     :event-details="draftEventData"
+    @publish="handleMaterialsPublish"
   />
 </template>
 

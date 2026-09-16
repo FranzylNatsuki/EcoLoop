@@ -3,6 +3,16 @@ import { ref, watch } from 'vue'
 import { Edit3, Megaphone, Calendar, ChevronRight, X } from 'lucide-vue-next'
 import CreateEventModal from './CreateEventModal.vue'
 import CreateCauseModal from './CreatePost.vue'
+import { usePosts, type CreatePostPayload } from '../../composables/usePosts'
+import { useEvents } from '../../composables/useEvents'
+
+const { addPost } = usePosts()
+const { addEvent } = useEvents()
+
+
+function isEventPayload(payload: any): payload is { event: any; materials: any[] } {
+  return payload && typeof payload === 'object' && 'event' in payload && 'materials' in payload
+}
 
 // Controls visibility of THIS chooser modal
 const isOpen = defineModel<boolean>({ default: false })
@@ -42,9 +52,16 @@ function handleSelectEvent() {
   isEventModalOpen.value = true
 }
 
-function handlePublish(payload: any) {
+async function handlePublish(payload: any) {
+  if (isEventPayload(payload)) {
+    await addEvent(payload)
+  } else {
+    await addPost(payload as CreatePostPayload)
+  }
   emit('publish', payload)
 }
+
+
 </script>
 
 <template>

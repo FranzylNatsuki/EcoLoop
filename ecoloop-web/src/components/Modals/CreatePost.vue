@@ -7,7 +7,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
-  (e: 'created', newPost: { category: string; title: string; description: string; images: string[] }): void
+  (e: 'publish', newPost: { category: string; title: string; description: string; images: string[] }): void
 }>()
 
 // Form States
@@ -71,7 +71,7 @@ function removeImage(index: number) {
 function handleSubmit() {
   if (!title.value.trim() || !description.value.trim()) return
 
-  emit('created', {
+  emit('publish', {
     category: selectedCategory.value,
     title: title.value,
     description: description.value,
