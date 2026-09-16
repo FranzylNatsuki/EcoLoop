@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-
-// Vue 3.4+ v-model wrapper for open/close state
+// hihi
+// // Vue 3.4+ v-model wrapper for open/close state
 const isOpen = defineModel<boolean>({ default: false })
 
 // Props for custom donation details (falls back to Figma defaults if empty)
