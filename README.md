@@ -57,6 +57,7 @@ npm run dev
 * CreatePostBar.vue - + Create Post Button
 * PostActions.vue - comments, donate, etc.
 * PostCard.vue - Post component
+* EventCard.vue - Event component card
 * VotePanel.vue - reddit votes ahh
 * PodyCommentItem.vue
 * PostCommentSection.vue
@@ -90,6 +91,10 @@ npm run dev
 `src/components/Modals` *dialogue boxes*
 * CreatePost.vue
 * DonateMaterialsModals.vue
+* CreateEventModal.vue
+* CreateChooserModal.vue
+* RequestMaterialsModal.vue
+* ThankYouDonationModal.vue
 
 `src/views` *individual pages*
 * HomeView.vue - home page component
@@ -103,6 +108,7 @@ npm run dev
 
 `src/composables` *contains engine for json read / write*
 * usePosts.ts
+* useEvents.ts
 
 ### Router (IMPORTANT!)
 Router defines the locators for the view controller (which page is loaded, refer to examples of how `<RouterLink to="">` is used in my examples e.g.: `CreatePostButton.vu`). *New Pages* require to be defined in the router and must be addressed using RouterLink as href. It is located in `src/router`. Edit `index.ts`.
