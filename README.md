@@ -38,7 +38,7 @@ npx json-server --port 3001 src/data/db.json
 npm run dev
 ```
 
-### File System
+### File System Vue
 
 `src/` *Contains all web page and component code*
 
@@ -147,3 +147,14 @@ This contains the list of views:
 * userData.json
 * eventData.json
 * mockMarketplace.json
+
+### File System C#
+
+`Controllers/`
+`obj/`
+`Properties/`
+`appsettings.json/`
+`appsettings.Development.json/`
+`EcoLoop.Api.csproj/`
+`EcoLoop.Api.http/`
+`Program.cs`
