@@ -49,6 +49,14 @@
             "Microsoft.AspNetCore.OpenApi": {
               "target": "Package",
               "version": "[10.0.11, )"
+            },
+            "Npgsql": {
+              "target": "Package",
+              "version": "[10.0.3, )"
+            },
+            "Npgsql.DependencyInjection": {
+              "target": "Package",
+              "version": "[10.0.3, )"
             }
           },
           "imports": [

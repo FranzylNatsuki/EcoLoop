@@ -168,3 +168,9 @@ This contains the list of views:
 2.
 
 `dotnet user-secrets set "Supabase:SecretKey" "xxxx"`
+
+3.
+
+`dotnet user-secrets set "ConnectionStrings:Supabase" "Host=aws-0-ap-northeast-1.pooler.supabase.com;Port=5432;Username=postgres.vqxfmwbuwbafxubinmyw;Password=[REDACTED];Database=postgres"`
+
+### User Secrets for C#

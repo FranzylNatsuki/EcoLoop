@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const fullName = ref('')
 const location = ref('')
@@ -12,6 +15,9 @@ const isOrganization = ref(false)
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 
+const isSubmitting = ref(false)
+const errorMessage = ref('')
+
 const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value
 }
@@ -20,15 +26,54 @@ const toggleConfirmPasswordVisibility = () => {
   showConfirmPassword.value = !showConfirmPassword.value
 }
 
-const handleRegister = () => {
-  console.log('Registering user:', {
-    fullName: fullName.value,
-    location: location.value,
-    contactNumber: contactNumber.value,
-    email: email.value,
-    password: password.value,
-    isOrganization: isOrganization.value,
-  })
+// TODO: move to an env var / config file instead of hardcoding
+const API_BASE_URL = 'http://localhost:5167'
+
+const handleRegister = async () => {
+  errorMessage.value = ''
+
+  if (password.value !== confirmPassword.value) {
+    errorMessage.value = 'Passwords do not match.'
+    return
+  }
+
+  isSubmitting.value = true
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fullName: fullName.value,
+        location: location.value,
+        contactNumber: contactNumber.value,
+        email: email.value,
+        password: password.value,
+        isOrg: isOrganization.value,
+      }),
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      // C# returns { error: "..." } on 400, or a ProblemDetails object on 500
+      errorMessage.value = data.error || data.detail || 'Registration failed. Please try again.'
+      return
+    }
+
+    // Success — store tokens
+    localStorage.setItem('accessToken', data.accessToken)
+    localStorage.setItem('refreshToken', data.refreshToken)
+    localStorage.setItem('userId', data.userId)
+
+    // Redirect to home (adjust to whatever route makes sense)
+    router.push('/home')
+  } catch (err) {
+    errorMessage.value = 'Could not reach the server. Please check your connection.'
+    console.error(err)
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 const handleGoogleAuth = () => {
@@ -229,11 +274,14 @@ const handleGoogleAuth = () => {
           </label>
         </div>
 
+        <p v-if="errorMessage" style="color: #D64545; font-size: 13px; margin: 0;">
+          {{ errorMessage }}
+        </p>
         <!-- Action Buttons -->
         <div class="actions">
-          <button type="submit" class="btn-register" :class="{ 'btn-org': isOrganization }">
-            {{ isOrganization ? 'Sign Up as Organization' : 'Create Account' }}
-          </button>
+            <button type="submit" class="btn-register" :class="{ 'btn-org': isOrganization }" :disabled="isSubmitting">
+              {{ isSubmitting ? 'Creating account...' : (isOrganization ? 'Sign Up as Organization' : 'Create Account') }}
+            </button>
 
           <div class="divider">
             <div class="line"></div>
