@@ -1,6 +1,8 @@
+<!--Login.vue-->
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { supabase } from '../composables/useAuth' // Import the Supabase client
 
 const router = useRouter()
 
@@ -15,46 +17,23 @@ const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value
 }
 
-// TODO: move to an env var once deployed
-const API_BASE_URL = 'http://localhost:5167'
-
 const handleLogin = async () => {
   errorMessage.value = ''
   isSubmitting.value = true
 
   try {
-    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: email.value,
-        password: password.value,
-      }),
+    // Let Supabase handle the login and token management
+    const { error } = await supabase.auth.signInWithPassword({
+      email: email.value,
+      password: password.value,
     })
 
-    // Safely parse JSON response
-    let data: any = {}
-    try {
-      data = await res.json()
-    } catch {
-      // Handles non-JSON error payloads gracefully
-    }
-
-    if (!res.ok) {
-      errorMessage.value =
-        data.error ||
-        data.detail ||
-        `Login failed (${res.status}). Please check your credentials.`
+    if (error) {
+      errorMessage.value = error.message
       return
     }
 
-    // Save auth session details
-    localStorage.setItem('accessToken', data.accessToken)
-    localStorage.setItem('refreshToken', data.refreshToken)
-    if (data.userId) {
-      localStorage.setItem('userId', data.userId)
-    }
-
+    // Success! Session is automatically saved.
     router.push('/home')
   } catch (err) {
     errorMessage.value = 'Could not reach the server. Please check your connection.'
@@ -66,6 +45,7 @@ const handleLogin = async () => {
 
 const handleGoogleAuth = () => {
   console.log('Google Auth Triggered')
+  // For later: supabase.auth.signInWithOAuth({ provider: 'google' })
 }
 </script>
 

@@ -1,4 +1,7 @@
 using EcoLoop.Api.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +32,24 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Grab the secrets from your dotnet user-secrets
+var supabaseSignature = builder.Configuration["Supabase:SecretKey"];
+var supabaseUrl = builder.Configuration["Supabase:Url"];
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(supabaseSignature)),
+            ValidAudience = "authenticated",
+            ValidIssuer = $"{supabaseUrl}/auth/v1"
+        };
+    });
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -39,6 +60,8 @@ if (app.Environment.IsDevelopment())
 
 // app.UseHttpsRedirection();
 app.UseCors("AllowVueDev");
+app.UseAuthorization();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 

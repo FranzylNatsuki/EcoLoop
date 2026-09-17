@@ -3,10 +3,33 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { BellRing, ChevronDown, User, LogOut } from 'lucide-vue-next'
 import CreatePostButton from './CreatePostButton.vue'
 import { RouterLink, useRouter } from 'vue-router'
+import { supabase } from '../../composables/useAuth' // Import the Supabase client
 
 const router = useRouter()
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
+
+const userAvatar = ref<string | null>(null) // Add this state
+
+onMounted(async () => {
+  document.addEventListener('click', handleClickOutside)
+
+  // 1. Grab the current session
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (session) {
+    // 2. Fetch just the Avatar column for this user
+    const { data, error } = await supabase
+      .from('profile_data')
+      .select('Avatar')
+      .eq('id', session.user.id)
+      .single()
+
+    if (!error && data?.Avatar) {
+      userAvatar.value = data.Avatar // 3. Save it to the ref
+    }
+  }
+})
 
 // Toggle profile menu
 const toggleDropdown = () => {
@@ -19,10 +42,15 @@ const navigateToProfile = () => {
   router.push('/profile')
 }
 
-// Logout placeholder action
-const handleLogout = () => {
+// Execute Supabase logout
+const handleLogout = async () => {
   isDropdownOpen.value = false
-  // Logout logic will be placed here
+
+  // Destroys the session in Supabase and clears local storage
+  await supabase.auth.signOut()
+
+  // Kick the user back to the login screen
+  router.push('/login')
 }
 
 // Close dropdown when clicking outside
@@ -72,10 +100,15 @@ onUnmounted(() => {
 
         <!-- Profile Menu Wrapper -->
         <div class="profile-menu-container" ref="dropdownRef">
-          <button class="profile" @click="toggleDropdown" :aria-expanded="isDropdownOpen">
-            <img src="https://placehold.co/32x32" alt="Your avatar" />
-            <ChevronDown :size="14" :class="{ 'icon-rotated': isDropdownOpen }" />
-          </button>
+            <button class="profile" @click="toggleDropdown" :aria-expanded="isDropdownOpen">
+              <!-- Dynamic Avatar! -->
+              <img
+                :src="userAvatar || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png'"
+                alt="Your avatar"
+                style="object-fit: cover;"
+              />
+              <ChevronDown :size="14" :class="{ 'icon-rotated': isDropdownOpen }" />
+            </button>
 
           <!-- Profile Dropdown Menu -->
           <transition name="dropdown-fade">

@@ -1,6 +1,9 @@
+<!--Registration.vue-->
+
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { supabase } from '../composables/useAuth' // Import the Supabase client
 
 const router = useRouter()
 
@@ -26,9 +29,6 @@ const toggleConfirmPasswordVisibility = () => {
   showConfirmPassword.value = !showConfirmPassword.value
 }
 
-// TODO: move to an env var / config file instead of hardcoding
-const API_BASE_URL = 'http://localhost:5167'
-
 const handleRegister = async () => {
   if (isSubmitting.value) return
   errorMessage.value = ''
@@ -41,33 +41,26 @@ const handleRegister = async () => {
   isSubmitting.value = true
 
   try {
-    const res = await fetch(`${API_BASE_URL}/api/auth/register`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fullName: fullName.value,
-        location: location.value,
-        contactNumber: contactNumber.value,
-        email: email.value,
-        password: password.value,
-        isOrg: isOrganization.value,
-      }),
+    // Register the user with Supabase, passing extra metadata for the DB trigger
+    const { data, error } = await supabase.auth.signUp({
+      email: email.value,
+      password: password.value,
+      options: {
+        data: {
+          full_name: fullName.value,
+          location: location.value,
+          contact_number: contactNumber.value,
+          is_org: isOrganization.value,
+        }
+      }
     })
 
-    const data = await res.json()
-
-    if (!res.ok) {
-      // C# returns { error: "..." } on 400, or a ProblemDetails object on 500
-      errorMessage.value = data.error || data.detail || 'Registration failed. Please try again.'
+    if (error) {
+      errorMessage.value = error.message
       return
     }
 
-    // Success — store tokens
-    localStorage.setItem('accessToken', data.accessToken)
-    localStorage.setItem('refreshToken', data.refreshToken)
-    localStorage.setItem('userId', data.userId)
-
-    // Redirect to home (adjust to whatever route makes sense)
+    // Success! Supabase automatically handles the tokens.
     router.push('/home')
   } catch (err) {
     errorMessage.value = 'Could not reach the server. Please check your connection.'

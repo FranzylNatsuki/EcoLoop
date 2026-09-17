@@ -47,6 +47,15 @@ dotnet build
 dotnet run
 ```
 
+### Important Files.
+
+If this is your first time importing the project please create an .env file in `EcoLoop/ecoloop-web/.env`
+
+it should contain this code: [Replace with actual keys]
+```
+VITE_SUPABASE_URL=https://xxxx.supabase.co
+VITE_SUPABASE_ANON_KEY=[insertkeyhere]
+```
 
 ## Frontend: ecoloop-web
 
@@ -83,6 +92,8 @@ dotnet run
 * TrendingTopics.vue - list of #'s events
 * AuthorCard.vue
 * RelatedPosts.vue
+* SavedProjectsCard.vue
+* TrendingTopics.vue
 
 `src/components/events` *event page contents*
 * AboutProjectCard.vue
@@ -113,6 +124,9 @@ dotnet run
 * EventsView.vue - events page component
 * MarketplaceView.vue - marketplace page
 * PostDetailView.vue - enlarged posts once clicked
+* ProfileView.vue
+* Login.vue
+* Registration.vue
 
 `src/assets` *contains logos / images*
 
