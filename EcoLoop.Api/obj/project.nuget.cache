@@ -1,13 +1,13 @@
 {
   "version": 2,
-  "dgSpecHash": "1HQXAdkwDA4=",
+  "dgSpecHash": "7Sz5I+AG8aI=",
   "success": true,
-  "projectFilePath": "/Users/franzylmacalua/Documents/CODING/finals/EcoLoop/EcoLoop.Api/EcoLoop.Api.csproj",
+  "projectFilePath": "D:\\finals\\New folder\\EcoLoop\\EcoLoop.Api\\EcoLoop.Api.csproj",
   "expectedPackageFiles": [
-    "/Users/franzylmacalua/.nuget/packages/microsoft.aspnetcore.openapi/10.0.11/microsoft.aspnetcore.openapi.10.0.11.nupkg.sha512",
-    "/Users/franzylmacalua/.nuget/packages/microsoft.openapi/2.7.5/microsoft.openapi.2.7.5.nupkg.sha512",
-    "/Users/franzylmacalua/.nuget/packages/npgsql/10.0.3/npgsql.10.0.3.nupkg.sha512",
-    "/Users/franzylmacalua/.nuget/packages/npgsql.dependencyinjection/10.0.3/npgsql.dependencyinjection.10.0.3.nupkg.sha512"
+    "C:\\Users\\Natsuki\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.11\\microsoft.aspnetcore.openapi.10.0.11.nupkg.sha512",
+    "C:\\Users\\Natsuki\\.nuget\\packages\\microsoft.openapi\\2.7.5\\microsoft.openapi.2.7.5.nupkg.sha512",
+    "C:\\Users\\Natsuki\\.nuget\\packages\\npgsql\\10.0.3\\npgsql.10.0.3.nupkg.sha512",
+    "C:\\Users\\Natsuki\\.nuget\\packages\\npgsql.dependencyinjection\\10.0.3\\npgsql.dependencyinjection.10.0.3.nupkg.sha512"
   ],
   "logs": []
 }

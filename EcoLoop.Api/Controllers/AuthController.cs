@@ -29,15 +29,8 @@ public class AuthController : ControllerBase
 
         try
         {
-            Guid? orgId = null;
-
-            if (req.IsOrg)
-            {
-                orgId = await _authService.CreateOrganizationAsync();
-            }
-
             await _authService.CreateProfileAsync(
-                userId, req.FullName, req.Location, req.ContactNumber, req.Email, req.IsOrg, orgId);
+                userId, req.FullName, req.Location, req.ContactNumber, req.Email, req.IsOrg);
         }
         catch (Exception ex)
         {

@@ -10,8 +10,6 @@ Codebase for EcoLoop website for CCS-6. Full techstack specifications:
 * MonsterASP backend hosting
 * Vercel / Cloudflare pages Vue Server
 
-## Frontend: ecoloop-web
-
 ### Figma
 *Based on*:
 https://www.figma.com/design/PKSdF5zZNxwBqm1AotJfBJ/EcoLoo?node-id=1-1255&t=J2YowMGp3bxCLtYy-1 
@@ -38,6 +36,20 @@ npx json-server --port 3001 src/data/db.json
 npm run dev
 ```
 
+5. return to the base folder and transfer to EcoLoop.Api
+```bash
+cd EcoLoop.Api
+```
+
+6. build and run C# server
+```bash
+dotnet build
+dotnet run
+```
+
+
+## Frontend: ecoloop-web
+
 ### File System Vue
 
 `src/` *Contains all web page and component code*
@@ -47,7 +59,7 @@ npm run dev
 * AppHeader.vue - top header bar with search and create post
 * CategoryBar.vue - contains pill containers for categories
 * PageLayout.vue - defined layout preset vue file
-* SeeEventsButton.vue
+* SeeEventsButton.vue  
 * CreatePostButton.vue
 
 `src/components/navigation` *navigation presets*
@@ -163,14 +175,18 @@ This contains the list of views:
 
 1.
 
-`dotnet user-secrets set "Supabase:Url" "https://xxxx.supabase.co"`
+```bash
+dotnet user-secrets set "Supabase:Url" "https://xxxx.supabase.co"
+```
 
 2.
 
-`dotnet user-secrets set "Supabase:SecretKey" "xxxx"`
+```bash
+dotnet user-secrets set "Supabase:SecretKey" "xxxx"
+```
 
 3.
 
-`dotnet user-secrets set "ConnectionStrings:Supabase" "Host=aws-0-ap-northeast-1.pooler.supabase.com;Port=5432;Username=postgres.vqxfmwbuwbafxubinmyw;Password=[REDACTED];Database=postgres"`
-
-### User Secrets for C#
+```bash
+dotnet user-secrets set "ConnectionStrings:Supabase" "Host=aws-0-ap-northeast-1.pooler.supabase.com;Port=5432;Username=postgres.vqxfmwbuwbafxubinmyw;Password=[REDACTED];Database=postgres"`
+```
