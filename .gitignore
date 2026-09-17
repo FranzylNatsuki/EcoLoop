@@ -57,3 +57,4 @@ TestResult.xml
 nunit-*.xml
 ecoloop-web/node_modules/
 ecoloop-web/.env
+node_modules/

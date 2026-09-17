@@ -80,7 +80,7 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * PostCard.vue - Post component
 * EventCard.vue - Event component card
 * VotePanel.vue - reddit votes ahh
-* PodyCommentItem.vue
+* PostCommentItem.vue
 * PostCommentSection.vue
 * PostDetailHeader.vue
 * PostMaterialItem.vue
