@@ -10,6 +10,7 @@
     "mock-api": "json-server --port 3001 src/data/mockPosts.json"
   },
   "dependencies": {
+    "pinia": "^4.0.3",
     "vue": "^3.5.0",
     "vue-router": "^4.3.0"
   },

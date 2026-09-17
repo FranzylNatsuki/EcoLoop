@@ -30,7 +30,7 @@ import { RouterLink } from 'vue-router'
 				<!-- Figma-styled Create Post Button -->
 				<CreatePostButton />
 
-				<SeeEventsButton />
+				<!-- <SeeEventsButton /> -->
 
 				<button class="icon-btn">
 					<BellRing :size="18" />

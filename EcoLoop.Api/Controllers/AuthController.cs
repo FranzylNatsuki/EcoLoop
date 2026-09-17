@@ -54,6 +54,23 @@ public class AuthController : ControllerBase
             isOrg = req.IsOrg
         });
     }
+
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest req)
+    {
+        try
+        {
+            var (accessToken, refreshToken) = await _authService.SignInAsync(req.Email, req.Password);
+
+            // Return tokens
+            return Ok(new { accessToken, refreshToken });
+        }
+        catch (Exception ex)
+        {
+            // Bad credentials or Supabase error response
+            return Unauthorized(new { error = "Invalid email or password." });
+        }
+    }
 }
 
 public class RegisterRequest

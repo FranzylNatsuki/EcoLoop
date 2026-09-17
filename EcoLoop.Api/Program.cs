@@ -37,7 +37,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseHttpsRedirection();
+// app.UseHttpsRedirection();
 app.UseCors("AllowVueDev");
 app.UseAuthorization();
 app.MapControllers();

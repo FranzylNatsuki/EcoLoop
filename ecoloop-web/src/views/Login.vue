@@ -1,19 +1,67 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const email = ref('')
 const password = ref('')
 const showPassword = ref(false)
 
+const isSubmitting = ref(false)
+const errorMessage = ref('')
+
 const togglePasswordVisibility = () => {
   showPassword.value = !showPassword.value
 }
 
-const handleLogin = () => {
-  console.log('Logging in user:', {
-    email: email.value,
-    password: password.value,
-  })
+// TODO: move to an env var once deployed
+const API_BASE_URL = 'http://localhost:5167'
+
+const handleLogin = async () => {
+  errorMessage.value = ''
+  isSubmitting.value = true
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: email.value,
+        password: password.value,
+      }),
+    })
+
+    // Safely parse JSON response
+    let data: any = {}
+    try {
+      data = await res.json()
+    } catch {
+      // Handles non-JSON error payloads gracefully
+    }
+
+    if (!res.ok) {
+      errorMessage.value =
+        data.error ||
+        data.detail ||
+        `Login failed (${res.status}). Please check your credentials.`
+      return
+    }
+
+    // Save auth session details
+    localStorage.setItem('accessToken', data.accessToken)
+    localStorage.setItem('refreshToken', data.refreshToken)
+    if (data.userId) {
+      localStorage.setItem('userId', data.userId)
+    }
+
+    router.push('/home')
+  } catch (err) {
+    errorMessage.value = 'Could not reach the server. Please check your connection.'
+    console.error('Login error:', err)
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 const handleGoogleAuth = () => {
@@ -134,11 +182,14 @@ const handleGoogleAuth = () => {
           </RouterLink>
         </div>
 
+        <p v-if="errorMessage" style="color: #D64545; font-size: 13px; margin: 0;">
+          {{ errorMessage }}
+        </p>
         <!-- Action Buttons -->
         <div class="actions">
-          <button type="submit" class="btn-login">
-            Sign In
-          </button>
+            <button type="submit" class="btn-login" :disabled="isSubmitting">
+              {{ isSubmitting ? 'Signing in...' : 'Sign In' }}
+            </button>
 
           <div class="divider">
             <div class="line"></div>
