@@ -38,6 +38,19 @@ npx json-server --port 3001 src/data/db.json
 npm run dev
 ```
 
+5. open another terminal, and run
+
+```bash
+cd EcoLoop.Api
+```
+
+6. run dotnet server
+```bash
+dotnet build
+dotnet run
+```
+
+
 ### File System Vue
 
 `src/` *Contains all web page and component code*
@@ -172,5 +185,3 @@ This contains the list of views:
 3.
 
 `dotnet user-secrets set "ConnectionStrings:Supabase" "Host=aws-0-ap-northeast-1.pooler.supabase.com;Port=5432;Username=postgres.vqxfmwbuwbafxubinmyw;Password=[REDACTED];Database=postgres"`
-
-### User Secrets for C#
