@@ -1,171 +1,126 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute, RouterLink } from 'vue-router'
+import { supabase } from '../composables/useAuth'
 
-// Existing shared layout components
+// Import your components (Make sure these paths are correct for your app)
 import PageLayout from '../components/layout/PageLayout.vue'
 import BackButton from '../components/common/BackButton.vue'
-import CommunityRules from '../components/sidebar/CommunityRules.vue'
-
-// View-specific components
 import PostDetailHeader from '../components/posts/PostDetailHeader.vue'
 import PostMaterialList from '../components/posts/PostMaterialList.vue'
 import PostCommentSection from '../components/posts/PostCommentSection.vue'
 import AuthorCard from '../components/sidebar/AuthorCard.vue'
+import CommunityRules from '../components/sidebar/CommunityRules.vue'
 import RelatedPosts from '../components/sidebar/RelatedPosts.vue'
 
-import type { Material } from '../components/posts/PostMaterialItem.vue'
-
-interface RawAuthor {
-  name: string
-  avatar: string
-}
-
-interface RawPost {
-  id: number
-  title: string
-  body: string
-  image?: string
-  votes: number
-  comments: number | any[]
-  category: string
-  createdAt: string
-  author: RawAuthor
-  materials?: Array<string | Partial<Material>>
-}
-
 const route = useRoute()
-const rawPost = ref<RawPost | null>(null)
+const post = ref<any>(null)
 const isLoading = ref(true)
 const error = ref<string | null>(null)
 
-async function fetchPostDetail() {
-  isLoading.value = true
-  error.value = null
-
+async function fetchPostDetails() {
   try {
-    const res = await fetch(`http://localhost:3001/posts/${route.params.id}`)
-    if (!res.ok) throw new Error('Post not found')
-    rawPost.value = await res.json()
+    const postId = route.params.id
+    const { data, error: fetchError } = await supabase
+      .from('cause_requests')
+      .select(`
+        *,
+        author:profiles!author_id (
+          full_name,
+          profile_data ( Avatar, about )
+        ),
+        post_images ( image_url, display_order )
+      `)
+      .eq('id', postId)
+      .single()
+
+    if (fetchError) throw fetchError
+
+    // Map it so it's clean for the template
+    post.value = {
+      ...data,
+      author: {
+        full_name: data.author?.full_name || 'Unknown User',
+        Avatar: data.author?.profile_data?.Avatar || 'https://placehold.co/38x38',
+        about: data.author?.profile_data?.about || 'No bio available.'
+      }
+    }
   } catch (err: any) {
     console.error('Failed to fetch post details:', err)
-    error.value = err.message || 'Failed to load post details'
+    error.value = err.message || 'Failed to load post details.'
   } finally {
     isLoading.value = false
   }
 }
 
-// 1. Sanitize the post object so `comments` is strictly a `number` for PostDetailHeader
-const post = computed(() => {
-  if (!rawPost.value) return null
-
-  const commentCount = Array.isArray(rawPost.value.comments)
-    ? rawPost.value.comments.length
-    : (rawPost.value.comments ?? 0)
-
-  return {
-    ...rawPost.value,
-    comments: commentCount
-  }
+onMounted(() => {
+  fetchPostDetails()
 })
 
-// 2. Default fallback materials if json-server doesn't provide them yet
-const defaultMaterials: Material[] = [
-  { id: 1, name: 'Glass Bottles', subtitle: 'Wine / juice bottles', current: 18, total: 25, unitLabel: 'bottles', progressRatioLabel: '86 / 120', isFulfilled: false },
-  { id: 2, name: 'Gravel / Pebbles', subtitle: 'Small decorative stones', current: 3, total: 5, unitLabel: 'bags', progressRatioLabel: '72 / 120', isFulfilled: false },
-  { id: 3, name: 'Cotton Twine', subtitle: 'Natural cotton wick material', current: 1, total: 1, unitLabel: 'spools', progressRatioLabel: 'Fulfilled', isFulfilled: true }
-]
+// 1. Match the child component's exact requirements
+interface PostMaterial {
+  id: string | number
+  name: string
+  subtitle: string
+  current: number
+  total: number
+  unitLabel: string
+  progressRatioLabel: string
+  isFulfilled: boolean
+}
 
-const formattedMaterials = computed<Material[]>(() => {
-  if (!rawPost.value?.materials || rawPost.value.materials.length === 0) {
-    return defaultMaterials
-  }
+// 2. Map the data safely, filling in blanks if the database doesn't have them yet
+const formattedMaterials = computed<PostMaterial[]>(() => {
+  if (!post.value?.materials || !Array.isArray(post.value.materials)) return []
 
-  return rawPost.value.materials.map((item, index) => {
-    if (typeof item === 'string') {
-      return {
-        id: index + 1,
-        name: item,
-        subtitle: 'Material contribution needed',
-        current: 0,
-        total: 1,
-        unitLabel: 'pcs',
-        progressRatioLabel: '0 / 1 pcs',
-        isFulfilled: false
-      }
-    }
+  return post.value.materials.map((m: any, index: number) => {
+    const currentAmount = m.current || 0
+    const totalAmount = m.total || 1 // Avoid division by zero in child components
 
     return {
-      id: item.id ?? index + 1,
-      name: item.name ?? 'Unknown Material',
-      subtitle: item.subtitle ?? 'Material contribution needed',
-      current: item.current ?? 0,
-      total: item.total ?? 1,
-      unitLabel: item.unitLabel ?? 'pcs',
-      progressRatioLabel: item.progressRatioLabel ?? `${item.current ?? 0} / ${item.total ?? 1}`,
-      isFulfilled: item.isFulfilled ?? false
+      id: m.id || `material-${index}`,
+      name: m.name || 'Unknown Material',
+      subtitle: m.subtitle || m.description || '',
+      current: currentAmount,
+      total: totalAmount,
+      unitLabel: m.unitLabel || m.unit || 'units',
+      progressRatioLabel: m.progressRatioLabel || `${currentAmount} / ${totalAmount}`,
+      isFulfilled: !!m.isFulfilled || currentAmount >= totalAmount
     }
   })
 })
 
-// 3. Default comments feed if none exist in json-server response
+const fulfilledCount = computed(() => {
+  return formattedMaterials.value.filter(m => m.isFulfilled).length
+})
+
+// 2. Comments (Empty array until you build a comments table)
 const commentsData = computed(() => {
-  if (Array.isArray(rawPost.value?.comments) && rawPost.value.comments.length > 0) {
-    return rawPost.value.comments
+  return []
+})
+
+// 3. Author Profile (Maps the Supabase joined data to the format your AuthorCard expects)
+// 3. Author Profile (Provides a safe fallback object to satisfy TypeScript)
+const authorProfile = computed(() => {
+  if (!post.value?.author) {
+    return {
+      name: 'Loading...',
+      avatar: 'https://placehold.co/38x38',
+      about: 'Loading bio...',
+      role: 'Community Member'
+    }
   }
 
-  return [
-    {
-      id: 1,
-      author: 'green_thumb',
-      avatarInitial: 'G',
-      timeAgo: '1 hour ago',
-      content: 'I have a few cleaned wine bottles that might work for this.'
-    },
-    {
-      id: 4,
-      author: 'eco_warrior99',
-      avatarInitial: 'E',
-      timeAgo: '22 minutes ago',
-      content: 'This is a really cool way to reuse old bottles!',
-      replies: [
-        {
-          id: 5,
-          author: 'nature_craft',
-          avatarInitial: 'N',
-          isAuthor: true,
-          timeAgo: '10 minutes ago',
-          content: "Thanks! I'll post an update once everything is planted."
-        }
-      ]
-    }
-  ]
+  return {
+    name: post.value.author.full_name,
+    avatar: post.value.author.Avatar,
+    about: post.value.author.about,
+    role: 'Community Member'
+  }
 })
-
-// 4. Author metadata formatting
-const authorProfile = computed(() => ({
-  name: post.value?.author.name || 'nature_craft',
-  avatar: post.value?.author.avatar || 'https://placehold.co/44x44',
-  karma: 14200,
-  bio: 'Loves turning everyday waste into useful things. Sharing practical upcycling projects with the community.',
-  tipsShared: 238,
-  upcycles: 1200,
-  rankingCategory: 'Upcycling',
-  rankingPosition: '#1',
-  joinedYear: '2024' // Changed from 2024 (number) to '2024' (string)
-}))
-
-const relatedPosts = [
-  { id: 101, title: 'DIY automatic watering system with plastic soda bottles', votes: 182, category: 'Upcycling' },
-  { id: 102, title: 'Cleaned wine bottle decorative candle holders guide', votes: 95, category: 'Upcycling' }
-]
-
-watch(() => route.params.id, () => {
-  if (route.params.id) fetchPostDetail()
-})
-
-onMounted(() => {
-  fetchPostDetail()
+// 4. Related Posts (Empty array until you write a query to fetch them)
+const relatedPosts = computed(() => {
+  return []
 })
 </script>
 
@@ -184,10 +139,10 @@ onMounted(() => {
       <BackButton />
       <PostDetailHeader :post="post" />
       <PostMaterialList
-        :materials="formattedMaterials"
-        :fulfilled-count="formattedMaterials.filter(m => m.isFulfilled).length"
-        :total-count="formattedMaterials.length"
-      />
+              :materials="formattedMaterials"
+              :fulfilled-count="fulfilledCount"
+              :total-count="formattedMaterials.length"
+            />
       <PostCommentSection :comments="commentsData" />
     </template>
 

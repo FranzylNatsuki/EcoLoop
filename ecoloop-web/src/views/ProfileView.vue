@@ -123,9 +123,10 @@ const userPosts = computed(() => {
   // If posts aren't loaded, or the profile isn't loaded yet, return an empty array
   if (!posts.value || !Array.isArray(posts.value) || !profileData.value) return []
 
-  // Match the mock post author name to the real user's full_name
-  return posts.value.filter(post => post.author?.name === profileData.value.full_name)
+  // Update: Match against full_name instead of name
+  return posts.value.filter(post => post.author?.full_name === profileData.value.full_name)
 })
+
 </script>
 
 <template>

@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\finals\\New folder\\EcoLoop\\EcoLoop.Api\\EcoLoop.Api.csproj": {}
+    "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj": {}
   },
   "projects": {
-    "D:\\finals\\New folder\\EcoLoop\\EcoLoop.Api\\EcoLoop.Api.csproj": {
+    "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\finals\\New folder\\EcoLoop\\EcoLoop.Api\\EcoLoop.Api.csproj",
+        "projectUniqueName": "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj",
         "projectName": "EcoLoop.Api",
-        "projectPath": "D:\\finals\\New folder\\EcoLoop\\EcoLoop.Api\\EcoLoop.Api.csproj",
+        "projectPath": "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj",
         "packagesPath": "C:\\Users\\Natsuki\\.nuget\\packages\\",
-        "outputPath": "D:\\finals\\New folder\\EcoLoop\\EcoLoop.Api\\obj\\",
+        "outputPath": "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\obj\\",
         "projectStyle": "PackageReference",
         "configFilePaths": [
           "C:\\Users\\Natsuki\\AppData\\Roaming\\NuGet\\NuGet.Config"

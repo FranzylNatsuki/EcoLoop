@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "brLS9qfmi6A=",
+  "dgSpecHash": "TmoB8H5bFv4=",
   "success": true,
-  "projectFilePath": "D:\\finals\\New folder\\EcoLoop\\EcoLoop.Api\\EcoLoop.Api.csproj",
+  "projectFilePath": "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Natsuki\\.nuget\\packages\\microsoft.aspnetcore.authentication.jwtbearer\\10.0.12\\microsoft.aspnetcore.authentication.jwtbearer.10.0.12.nupkg.sha512",
     "C:\\Users\\Natsuki\\.nuget\\packages\\microsoft.aspnetcore.openapi\\10.0.11\\microsoft.aspnetcore.openapi.10.0.11.nupkg.sha512",

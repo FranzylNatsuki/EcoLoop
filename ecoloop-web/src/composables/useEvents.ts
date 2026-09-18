@@ -21,13 +21,17 @@ interface EventModalPayload {
 
 export function useEvents() {
   async function fetchEvents() {
-    try {
-      const res = await fetch(API_URL)
-      events.value = await res.json()
-    } catch (err) {
-      console.error('Error fetching events:', err)
+      try {
+        // Temporarily disabled json-server fetch to prevent CORS errors
+        // const res = await fetch(API_URL)
+        // events.value = await res.json()
+
+        // Just return an empty array for now until we build the Supabase table
+        events.value = []
+      } catch (err) {
+        console.error('Error fetching events:', err)
+      }
     }
-  }
 
   async function fetchEventById(id: string) {
     try {

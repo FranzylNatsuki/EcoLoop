@@ -9,7 +9,6 @@ import { useEvents } from '../../composables/useEvents'
 const { addPost } = usePosts()
 const { addEvent } = useEvents()
 
-
 function isEventPayload(payload: any): payload is { event: any; materials: any[] } {
   return payload && typeof payload === 'object' && 'event' in payload && 'materials' in payload
 }
@@ -17,8 +16,11 @@ function isEventPayload(payload: any): payload is { event: any; materials: any[]
 // Controls visibility of THIS chooser modal
 const isOpen = defineModel<boolean>({ default: false })
 
+// FIX: Added selectCause and selectEvent to the allowed emits
 const emit = defineEmits<{
   (e: 'publish', payload: any): void
+  (e: 'selectCause'): void
+  (e: 'selectEvent'): void
 }>()
 
 const dialogRef = ref<HTMLDialogElement | null>(null)
@@ -45,23 +47,35 @@ function handleBackdropClick(e: MouseEvent) {
 function handleSelectCause() {
   isOpen.value = false
   isCauseModalOpen.value = true
+  emit('selectCause') // Let the parent component know!
 }
 
 function handleSelectEvent() {
   isOpen.value = false
   isEventModalOpen.value = true
+  emit('selectEvent') // Let the parent component know!
 }
 
 async function handlePublish(payload: any) {
+  console.log('1. Payload received from form:', payload)
+
   if (isEventPayload(payload)) {
+    console.log('2a. Saving Event to database...')
     await addEvent(payload)
   } else {
+    console.log('2b. Saving Post to database...')
     await addPost(payload as CreatePostPayload)
   }
+
+  console.log('3. Database write complete. Closing modals.')
+
+  // Close the child modal
+  isCauseModalOpen.value = false
+  isEventModalOpen.value = false
+
+  // Tell the parent (CreatePostButton) to close the main backdrop
   emit('publish', payload)
 }
-
-
 </script>
 
 <template>
