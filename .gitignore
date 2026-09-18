@@ -58,3 +58,5 @@ nunit-*.xml
 ecoloop-web/node_modules/
 ecoloop-web/.env
 node_modules/
+EcoLoop.Api/publish_output/
+EcoLoop.Api/appsettings.json

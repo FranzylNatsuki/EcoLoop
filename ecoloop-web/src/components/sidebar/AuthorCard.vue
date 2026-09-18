@@ -1,45 +1,51 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
+
 export interface AuthorProfile {
+  id: string
   name: string
   avatar: string
-  // Core optional metadata
-  handle?: string
   bio?: string
-  karma?: number
-  tipsShared?: number
-  upcycles?: number
-  joinedDate?: string
+  postCount?: number
+  communityScore?: number
   joinedYear?: string
-  rankingCategory?: string
-  rankingPosition?: string
-  location?: string
-  isFollowing?: boolean
 }
+
 defineProps<{ author: AuthorProfile }>()
 </script>
 
 <template>
   <section class="sidebar-card">
     <h2>Post Author</h2>
-    <div class="author-profile">
-      <img :src="author.avatar" :alt="author.name" class="avatar" />
-      <div>
-        <strong>u/{{ author.name }}</strong>
-      </div>
-    </div>
 
-    <p>{{ author.bio }}</p>
+    <RouterLink :to="`/user/${author.id}`" class="profile-link" style="text-decoration: none;">
+        <div class="author-profile">
+        <img :src="author.avatar" :alt="author.name" class="avatar" />
+        <div>
+            <strong>{{ author.name }}</strong>
+        </div>
+        </div>
 
+        <!-- Bio -->
+        <p v-if="author.bio" class="author-bio">{{ author.bio }}</p>
+        <p v-else class="author-bio empty-bio">No bio available.</p>
+    </RouterLink>
+
+    <!-- Stats Grid: Posts & Community Score -->
     <div class="author-stats">
-      <div><strong>{{ author.tipsShared }}</strong><span>Tips Shared</span></div>
-      <div><strong>{{ author.upcycles }}</strong><span>Upcycles</span></div>
+        <div class="stat-box">
+            <strong>{{ author.postCount || 0 }}</strong>
+            <span>Posts</span>
+        </div>
+        <div class="stat-box score-box">
+            <strong>{{ author.communityScore?.toFixed(1) || '0.0' }}</strong>
+            <span>Comm. Score</span>
+        </div>
     </div>
-
-    <div class="author-ranking">
-      <strong>{{ author.rankingPosition }}</strong>
-      <span>In {{ author.rankingCategory }}</span>
+    <!-- Join Year -->
+    <div v-if="author.joinedYear" class="joined-date">
+      Joined {{ author.joinedYear }}
     </div>
-    <div class="joined-date">Joined {{ author.joinedYear }}</div>
   </section>
 </template>
 
@@ -47,13 +53,21 @@ defineProps<{ author: AuthorProfile }>()
 .sidebar-card { background: #ffffff; border: 1px solid #e4e7e3; border-radius: 12px; padding: 20px; }
 .sidebar-card h2 { margin: 0 0 14px; font-family: 'Outfit', sans-serif; font-size: 16px; color: #1a1d1a; }
 .author-profile { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-.author-profile > div { display: flex; flex-direction: column; gap: 3px; }
 .avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
-.sidebar-card p { margin: 0 0 16px; font-size: 13px; color: #525a52; }
-.author-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-.author-stats div { padding: 10px; background: #f7f8f6; border-radius: 8px; display: flex; flex-direction: column; gap: 2px; }
-.author-stats strong { font-family: 'Outfit', sans-serif; font-size: 15px; color: #1a1d1a; }
-.author-stats span { font-size: 11px; color: #8f9a8f; }
-.author-ranking { display: flex; align-items: center; gap: 6px; padding: 10px; background: rgba(119, 135, 50, 0.08); border-radius: 8px; color: #778732; font-size: 12px; }
-.joined-date { margin-top: 12px; color: #8f9a8f; font-size: 11px; }
+.author-profile strong { color: #1a1d1a; font-size: 15px; }
+
+.author-bio { margin: 0 0 16px; font-size: 13px; color: #525a52; line-height: 1.5; }
+.empty-bio { color: #8f9a8f; font-style: italic; }
+
+/* Adjusted for 2 columns */
+.author-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.stat-box { padding: 12px; background: #f7f8f6; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.stat-box strong { font-family: 'Outfit', sans-serif; font-size: 18px; color: #1a1d1a; }
+.stat-box span { font-size: 11px; color: #8f9a8f; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; text-align: center; }
+
+/* Highlight the community score slightly */
+.score-box { background: rgba(119, 135, 50, 0.08); }
+.score-box strong { color: #778732; }
+
+.joined-date { color: #8f9a8f; font-size: 12px; text-align: center; padding-top: 12px; border-top: 1px solid #e4e7e3; }
 </style>

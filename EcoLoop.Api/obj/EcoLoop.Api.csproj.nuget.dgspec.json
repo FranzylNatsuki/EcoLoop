@@ -1,20 +1,20 @@
 {
   "format": 1,
   "restore": {
-    "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj": {}
+    "/Users/franzylmacalua/Documents/CODING/finals/EcoLoop/EcoLoop.Api/EcoLoop.Api.csproj": {}
   },
   "projects": {
-    "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj": {
+    "/Users/franzylmacalua/Documents/CODING/finals/EcoLoop/EcoLoop.Api/EcoLoop.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj",
+        "projectUniqueName": "/Users/franzylmacalua/Documents/CODING/finals/EcoLoop/EcoLoop.Api/EcoLoop.Api.csproj",
         "projectName": "EcoLoop.Api",
-        "projectPath": "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\EcoLoop.Api.csproj",
-        "packagesPath": "C:\\Users\\Natsuki\\.nuget\\packages\\",
-        "outputPath": "D:\\finals\\new folder\\ecoloop\\EcoLoop.Api\\obj\\",
+        "projectPath": "/Users/franzylmacalua/Documents/CODING/finals/EcoLoop/EcoLoop.Api/EcoLoop.Api.csproj",
+        "packagesPath": "/Users/franzylmacalua/.nuget/packages/",
+        "outputPath": "/Users/franzylmacalua/Documents/CODING/finals/EcoLoop/EcoLoop.Api/obj/",
         "projectStyle": "PackageReference",
         "configFilePaths": [
-          "C:\\Users\\Natsuki\\AppData\\Roaming\\NuGet\\NuGet.Config"
+          "/Users/franzylmacalua/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net10.0"
@@ -82,7 +82,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.401/PortableRuntimeIdentifierGraph.json",
+          "runtimeIdentifierGraphPath": "/usr/local/share/dotnet/sdk/10.0.400/PortableRuntimeIdentifierGraph.json",
           "packagesToPrune": {
             "Microsoft.AspNetCore": "(,10.0.32767]",
             "Microsoft.AspNetCore.Antiforgery": "(,10.0.32767]",

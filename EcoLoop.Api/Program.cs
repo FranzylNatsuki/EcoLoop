@@ -58,12 +58,16 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 // app.UseHttpsRedirection();
 app.UseCors("AllowVueDev");
-app.UseAuthorization();
 app.UseAuthentication();
 app.UseAuthorization();
+
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 app.MapGet("/test-db", async (IHttpClientFactory factory) =>
 {

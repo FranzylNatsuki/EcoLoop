@@ -32,9 +32,9 @@ const formattedSchedule = computed(() => {
   }).format(date)
 })
 
-function handleJoin() {
-  emit('join', props.event.id)
-}
+//function handleJoin() {
+//  emit('join', props.event.id)
+//}
 
 function handleShare() {
   emit('share', props.event.id)

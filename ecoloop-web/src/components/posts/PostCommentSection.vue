@@ -2,7 +2,11 @@
 import { ref } from 'vue'
 import PostCommentItem, { type Comment } from './PostCommentItem.vue'
 
-defineProps<{ comments: Comment[] }>()
+defineProps<{
+  comments: Comment[],
+  isSubmitting?: boolean // Added to handle loading state from parent
+}>()
+
 const emit = defineEmits<{
   (e: 'submit-comment', text: string): void
   (e: 'reply-comment', id: string | number): void
@@ -24,9 +28,22 @@ function handleSubmit() {
     </div>
 
     <div class="comment-input-area">
-      <textarea v-model="commentText" placeholder="Write a helpful comment..."></textarea>
+      <!-- Disable input while submitting -->
+      <textarea
+        v-model="commentText"
+        placeholder="Write a helpful comment..."
+        :disabled="isSubmitting"
+      ></textarea>
       <div class="comment-input-footer">
-        <button class="comment-button" @click="handleSubmit">Comment</button>
+        <!-- Disable button and show loading text -->
+        <button
+          class="comment-button"
+          @click="handleSubmit"
+          :disabled="isSubmitting"
+          :style="{ opacity: isSubmitting ? 0.7 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }"
+        >
+          {{ isSubmitting ? 'Posting...' : 'Comment' }}
+        </button>
       </div>
     </div>
 

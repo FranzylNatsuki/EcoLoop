@@ -1,137 +1,69 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../composables/useAuth'
 import PostCard from '../components/posts/PostCard.vue'
 import DonationHistoryCard from '../components/sidebar/DonationHistoryCard.vue'
-import SavedProjectsCard from '../components/sidebar/SavedProjectsCard.vue'
-import EditProfileModal from '../components/Modals/EditProfileModal.vue'
 import { usePosts } from '../composables/usePosts'
 
+const route = useRoute()
+const router = useRouter() // <--- Initialize it
+// Grab the ID
+// from the URL (e.g., /user/1234-5678-abcd)
+const targetUserId = route.params.id as string
+
+// Removed 'settings' and 'saved' (usually saved posts are private)
 const activeTab = ref('posts')
 const profileData = ref<any>(null)
 const isLoading = ref(true)
-const isEditModalOpen = ref(false)
 
-// Extract posts state and fetch method from composable
+// Extract posts state
 const { posts } = usePosts()
 
-// Fetch posts on view mount
 onMounted(async () => {
-  // 1. Actively await the session directly from Supabase so we don't race the initial load
+  if (!targetUserId) {
+    console.error("No user ID provided in URL.")
+    isLoading.value = false
+    return
+  }
+
   const { data: { session } } = await supabase.auth.getSession()
-
-  if (session) {
-    const userId = session.user.id
-    console.log("Session found! Fetching data for:", userId)
-
-    // 2. Fetch from your profiles and profile_data tables
-    const { data, error } = await supabase
-      .from('profiles')
-      .select(`
-        *,
-        profile_data (*)
-      `)
-      .eq('id', userId)
-      .single()
-
-    // 3. Log any database errors (like RLS or empty tables)
-    if (error) {
-      console.error("Database Error:", error.message)
+  if (session && session.user.id === targetUserId) {
+      console.log("User clicked their own profile. Redirecting to private dashboard...")
+      router.push('/profile') // Send them to MyProfileView
+      return // Stop running the rest of the code!
     }
 
-    if (data) {
-      console.log("Success! Profile Data:", data)
-      profileData.value = data
-    }
-  } else {
-    console.warn("No session found at all.")
+  // Fetch the target user's data directly from the URL param
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(`
+      *,
+      profile_data (*)
+    `)
+    .eq('id', targetUserId)
+    .single()
+
+  if (error) {
+    console.error("Failed to fetch public profile:", error.message)
+  }
+
+  if (data) {
+    profileData.value = data
   }
 
   isLoading.value = false
 })
 
-// The function that runs when the modal emits 'save'
-const handleSaveProfile = async (updatedData: any) => {
-  console.log("SAVE BUTTON CLICKED! Data received:", updatedData)
-
-  const { data: { session } } = await supabase.auth.getSession()
-
-  if (!session) {
-      console.error("No session found during save! Are you logged out?")
-      return
-  }
-
-  const userId = session.user.id
-  let finalAvatarUrl = updatedData.avatarPreview
-
-  // 1. Upload new avatar if one was selected
-  if (updatedData.avatarFile) {
-    const fileExt = updatedData.avatarFile.name.split('.').pop()
-    const filePath = `${userId}/avatar-${Date.now()}.${fileExt}`
-
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(filePath, updatedData.avatarFile, { upsert: true })
-
-    if (uploadError) {
-      console.error('Storage Upload Error:', uploadError.message)
-    } else {
-      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath)
-      finalAvatarUrl = data.publicUrl
-    }
-  }
-
-  // 2. Update profiles table
-  const { error: profileError } = await supabase.from('profiles')
-    .update({
-      full_name: updatedData.fullName,
-      location: updatedData.location,
-      contact_number: updatedData.contact
-    })
-    .eq('id', userId)
-
-  if (profileError) console.error("Profile Update Error:", profileError.message)
-
-  // 3. Update profile_data table
-  const { error: dataError } = await supabase.from('profile_data')
-    .update({
-      about: updatedData.about,
-      Avatar: finalAvatarUrl
-    })
-    .eq('id', userId)
-
-  if (dataError) console.error("Profile Data Update Error:", dataError.message)
-
-  // 4. Safely update the UI instantly
-  if (!profileError && !dataError && profileData.value) {
-    profileData.value.full_name = updatedData.fullName
-    profileData.value.location = updatedData.location
-    profileData.value.contact_number = updatedData.contact
-
-    // Safety check: Create the nested object if it doesn't exist yet!
-    if (!profileData.value.profile_data) {
-      profileData.value.profile_data = {}
-    }
-
-    profileData.value.profile_data.about = updatedData.about
-    profileData.value.profile_data.Avatar = finalAvatarUrl
-  }
-}
-
-// Filter posts matching the logged-in user's database name
+// Filter posts matching this specific user
 const userPosts = computed(() => {
-  // If posts aren't loaded, or the profile isn't loaded yet, return an empty array
   if (!posts.value || !Array.isArray(posts.value) || !profileData.value) return []
-
-  // Update: Match against full_name instead of name
   return posts.value.filter(post => post.author?.full_name === profileData.value.full_name)
 })
-
 </script>
 
 <template>
   <div class="profile-page">
-    <!-- Profile Header Container -->
     <header class="profile-header-container">
       <img
         class="profile-banner"
@@ -141,7 +73,6 @@ const userPosts = computed(() => {
 
       <div class="profile-info-block" v-if="!isLoading && profileData">
         <div class="avatar-overlap-wrapper">
-          <!-- Dynamic Avatar with fallback -->
           <img
             class="avatar-ring"
             :src="profileData.profile_data?.Avatar || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png'"
@@ -154,53 +85,53 @@ const userPosts = computed(() => {
         <div class="user-meta-main">
           <div class="name-row">
             <div class="names">
-              <!-- Dynamic Name, Email, and Year -->
               <h1 class="user-display-name">{{ profileData.full_name }}</h1>
-              <span class="user-subtext">{{ profileData.email }} • Joined {{ new Date(profileData.created_at).getFullYear() }}</span>
+              <span class="user-subtext">Joined {{ new Date(profileData.created_at).getFullYear() }}</span>
             </div>
-            <button class="btn-edit-profile" @click="isEditModalOpen = true">
-              Edit Profile
+
+            <!-- Replaced Edit Profile with a public interaction button -->
+            <button class="btn-edit-profile" style="background: rgba(119, 135, 50, 0.1); color: #778732;">
+              Follow User
             </button>
           </div>
-          <!-- Dynamic Bio -->
+
           <p class="user-bio">
             {{ profileData.profile_data?.about || 'No bio provided yet. 🌱' }}
           </p>
         </div>
       </div>
 
-      <!-- Loading State Fallback -->
       <div class="profile-info-block" v-else>
         <div class="avatar-placeholder-spacer"></div>
         <div class="user-meta-main">
-          <p>Loading profile...</p>
+          <p v-if="isLoading">Loading profile...</p>
+          <p v-else>User not found.</p>
         </div>
       </div>
 
-      <!-- Stats Bar: Dynamic Numbers -->
       <div class="profile-stats-wrapper" v-if="!isLoading && profileData">
-              <div class="profile-stats-inner">
-                <div class="stat-item">
-                  <span class="stat-value">{{ profileData.profile_data?.ItemsDonated || 0 }}</span>
-                  <span class="stat-label">Items Donated</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
-                  <span class="stat-label">Projects Supported</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-value">{{ profileData.profile_data?.MaterialsCollected || 0 }} lbs</span>
-                  <span class="stat-label">Materials Collected</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-value">{{ profileData.profile_data?.CommunityScore || 0 }}/5</span>
-                  <span class="stat-label">Community Score</span>
-                </div>
-              </div>
-            </div>
-            <div class="profile-stats-wrapper" v-else></div>
+        <div class="profile-stats-inner">
+          <div class="stat-item">
+            <span class="stat-value">{{ profileData.profile_data?.ItemsDonated || 0 }}</span>
+            <span class="stat-label">Items Donated</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
+            <span class="stat-label">Projects Supported</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ profileData.profile_data?.MaterialsCollected || 0 }} lbs</span>
+            <span class="stat-label">Materials Collected</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ profileData.profile_data?.CommunityScore || 0 }}/5</span>
+            <span class="stat-label">Community Score</span>
+          </div>
+        </div>
+      </div>
+      <div class="profile-stats-wrapper" v-else></div>
 
-      <!-- Tab Navigation -->
+      <!-- Stripped out 'Saved' and 'Settings' since this is a public view -->
       <nav class="profile-tabs" aria-label="Profile section tabs">
         <button
           class="tab-btn"
@@ -214,53 +145,35 @@ const userPosts = computed(() => {
           :class="{ active: activeTab === 'donations' }"
           @click="activeTab = 'donations'"
         >
-          Donations
-        </button>
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'saved' }"
-          @click="activeTab = 'saved'"
-        >
-          Saved Projects
-        </button>
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'settings' }"
-          @click="activeTab = 'settings'"
-        >
-          Settings
+          Recent Activity
         </button>
       </nav>
     </header>
 
-    <!-- Main Content Layout Area -->
     <div class="main-layout-wrapper">
-      <!-- Left Feed Area -->
       <section class="left-feed-column">
         <template v-if="activeTab === 'posts'">
+          <div v-if="userPosts.length === 0" class="tab-placeholder-card">
+            <p>This user hasn't posted anything yet.</p>
+          </div>
           <PostCard
+            v-else
             v-for="post in userPosts"
             :key="post.id"
             :post="post"
           />
         </template>
+
         <div v-else class="tab-placeholder-card">
-          <p>Displaying {{ activeTab }} content...</p>
+          <p>No recent activity to display.</p>
         </div>
       </section>
 
-      <!-- Right Sidebar Area -->
       <aside class="right-sidebar-column">
         <DonationHistoryCard />
-        <SavedProjectsCard />
       </aside>
     </div>
   </div>
-  <EditProfileModal
-    v-model="isEditModalOpen"
-    :initialData="profileData"
-    @save="handleSaveProfile"
-  />
 </template>
 
 <style scoped>

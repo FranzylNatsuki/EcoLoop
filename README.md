@@ -10,6 +10,9 @@ Codebase for EcoLoop website for CCS-6. Full techstack specifications:
 * MonsterASP backend hosting
 * Vercel / Cloudflare pages Vue Server
 
+Deployed Site:
+`ecoloop.runasp.net`
+
 ### Figma
 *Based on*:
 https://www.figma.com/design/PKSdF5zZNxwBqm1AotJfBJ/EcoLoo?node-id=1-1255&t=J2YowMGp3bxCLtYy-1 

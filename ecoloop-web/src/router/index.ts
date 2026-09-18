@@ -7,6 +7,7 @@ import PostDetailView from '../views/PostDetailView.vue'
 import Registration from '../views/Registration.vue'
 import Profile from '../views/ProfileView.vue'
 import Login from '../views/Login.vue'
+import PublicProfileView from '../views/PublicProfileView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -58,6 +59,11 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: Profile,
+    },
+    {
+      path: '/user/:id', // Public read-only view (relies on URL ID)
+      name: 'public-profile',
+      component: PublicProfileView,
     }
   ],
 })

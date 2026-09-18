@@ -1,47 +1,98 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import PostActions from './PostActions.vue'
 import VotePanel from './VotePanel.vue'
 
+// Updated to match Supabase profile data
 interface Author {
-  name: string
-  avatar: string
+  full_name: string
+  Avatar: any // Changed to 'any' to handle the JSON object
 }
 
+// Added interface for the images array
+interface PostImage {
+  image_url: string
+}
+
+// Updated to match your cause_requests table schema
 interface Post {
   id: string | number
   title: string
   body: string
-  image?: string
-  votes: number
-  comments: number
+  vote_count: number
+  comment_count: number
   category: string
-  createdAt: string
+  created_at: string
   author: Author
+  author_id: string
 }
 
-defineProps<{ post: Post }>()
+const props = defineProps<{
+  post: Post,
+  images?: PostImage[] // Catch the passed images array
+}>()
+
+// Safely extract the avatar URL from the JSON object or fallback
+const avatarUrl = computed(() => {
+  const avatarData = props.post.author?.Avatar
+
+  if (typeof avatarData === 'string') return avatarData
+  // If it's a JSON object like {"avatar": "url..."}
+  if (avatarData && typeof avatarData === 'object' && avatarData.avatar) return avatarData.avatar
+
+  return 'https://placehold.co/38x38' // Fallback
+})
+
+// Format the date nicely
+const formattedDate = computed(() => {
+  if (!props.post.created_at) return ''
+  const date = new Date(props.post.created_at)
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+})
 </script>
 
 <template>
   <article class="detail-post">
-    <VotePanel :votes="post.votes" @click.stop />
+    <!-- Updated: vote_count -->
+    <VotePanel :votes="post.vote_count" @click.stop />
 
     <div class="detail-post-content">
       <div class="detail-post-meta">
         <div class="author-info">
-          <img :src="post.author.avatar" :alt="post.author.name" class="detail-avatar" />
-          <span>Posted by <strong>u/{{ post.author.name }}</strong></span>
+          <!-- Updated: Use computed avatarUrl -->
+        <RouterLink :to="`/user/${post.author_id}`">
+          <img :src="avatarUrl" :alt="post.author.full_name" class="detail-avatar" />
+        </RouterLink>
+          <span>Posted by
+               <RouterLink :to="`/user/${post.author_id}`">
+                   <strong> {{ post.author.full_name }}
+                   </strong>
+               </RouterLink>
+          </span>
           <span>•</span>
-          <span>{{ post.createdAt }}</span>
+          <!-- Updated: Use computed formattedDate -->
+          <span>{{ formattedDate }}</span>
         </div>
         <span class="detail-category">{{ post.category }}</span>
       </div>
 
       <h1>{{ post.title }}</h1>
       <p class="detail-body">{{ post.body }}</p>
-      <img v-if="post.image" :src="post.image" :alt="post.title" class="detail-image" />
 
-      <PostActions :comments="post.comments" :hide-comments="true" />
+      <!-- Render multiple images if they exist -->
+      <div v-if="images && images.length > 0" class="image-gallery">
+        <img
+          v-for="(img, idx) in images"
+          :key="idx"
+          :src="img.image_url"
+          :alt="post.title"
+          class="detail-image"
+          style="margin: 5px 10px 26px 5px;"
+        />
+      </div>
+
+      <!-- Updated: comment_count -->
+      <PostActions :comments="post.comment_count" :hide-comments="true" />
     </div>
   </article>
 </template>

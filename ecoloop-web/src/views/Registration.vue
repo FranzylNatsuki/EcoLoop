@@ -55,6 +55,17 @@ const handleRegister = async () => {
       }
     })
 
+    if (data?.user) {
+      // Manually insert into public.profiles
+      await supabase.from('profiles').insert({
+        id: data.user.id,
+        full_name: fullName.value,
+        location: location.value,
+        contact_number: contactNumber.value,
+        is_org: isOrganization.value,
+      })
+    }
+
     if (error) {
       errorMessage.value = error.message
       return
