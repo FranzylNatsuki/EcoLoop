@@ -5,6 +5,7 @@ import EventsView from '../views/EventsView.vue'
 import MarketplaceView from '../views/MarketplaceView.vue'
 import PostDetailView from '../views/PostDetailView.vue'
 import Registration from '../views/Registration.vue'
+import Profile from '../views/ProfileView.vue'
 import Login from '../views/Login.vue'
 
 const router = createRouter({
@@ -52,6 +53,11 @@ const router = createRouter({
       name: 'login',
       component: Login,
       meta: { hideHeader: true },
+    },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: Profile,
     }
   ],
 })

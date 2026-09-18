@@ -46,8 +46,7 @@ public class SupabaseAuthService
     }
 
     // SupabaseAuthService.cs — add these methods
-
-    public async Task CreateProfileAsync(Guid id, string fullName, string? location, string? contactNumber, string email, bool isOrg, Guid? organizationId)
+    public async Task CreateProfileAsync(Guid id, string fullName, string? location, string? contactNumber, string email, bool isOrg)
     {
         var payload = new
         {
@@ -57,7 +56,6 @@ public class SupabaseAuthService
             contact_number = contactNumber,
             email,
             is_org = isOrg,
-            organization_id = organizationId
         };
 
         var res = await _http.PostAsJsonAsync("/rest/v1/profiles", payload);

@@ -1,22 +1,46 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 import VotePanel from './VotePanel.vue'
 import PostActions from './PostActions.vue'
+
+// 1. Updated interface to match the Supabase data
+interface PostImage {
+  image_url: string
+  display_order: number
+}
 
 interface Post {
   id: string | number
   title: string
   body: string
-  image?: string
-  votes: number
-  comments: number
+  post_images?: PostImage[]
+  vote_count: number       // Changed from votes
+  comment_count: number    // Changed from comments
   category: string
-  createdAt: string
-  author: { name: string; avatar: string }
+  created_at: string       // Changed from createdAt
+  author: { full_name: string; Avatar: string } // Changed from name/avatar
 }
 
 const props = defineProps<{ post: Post }>()
 const router = useRouter()
+
+// 2. Safely extract the first image to use as the cover
+const coverImage = computed(() => {
+  if (props.post.post_images && props.post.post_images.length > 0) {
+    const sortedImages = [...props.post.post_images].sort((a, b) => a.display_order - b.display_order)
+    return sortedImages[0].image_url
+  }
+  return null
+})
+
+// 3. Count any remaining images for the "+X" badge
+const extraImagesCount = computed(() => {
+  if (props.post.post_images && props.post.post_images.length > 1) {
+    return props.post.post_images.length - 1
+  }
+  return 0
+})
 
 function openPost() {
   router.push(`/post/${props.post.id}`)
@@ -25,24 +49,35 @@ function openPost() {
 
 <template>
   <article class="post-card" @click="openPost">
-    <VotePanel :votes="post.votes" @click.stop />
+    <!-- Updated: votes -> vote_count -->
+    <VotePanel :votes="post.vote_count" @click.stop />
 
     <div class="post-content">
       <div class="post-meta">
-        <img :src="post.author.avatar" :alt="post.author.name" class="avatar" />
-        <span class="author-name">{{ post.author.name }}</span>
+        <!-- Updated: avatar -> Avatar, name -> full_name -->
+        <img :src="post.author.Avatar" :alt="post.author.full_name" class="avatar" />
+        <span class="author-name">{{ post.author.full_name }}</span>
         <span class="meta-dot">•</span>
-        <span class="time-ago">{{ post.createdAt }}</span>
+        <!-- Updated: createdAt -> created_at (and formatted for readability) -->
+        <span class="time-ago">{{ new Date(post.created_at).toLocaleDateString() }}</span>
         <span class="category">{{ post.category }}</span>
       </div>
 
       <h2>{{ post.title }}</h2>
       <p>{{ post.body }}</p>
 
-      <img v-if="post.image" :src="post.image" :alt="post.title" class="post-image" />
+      <!-- Updated: image -> coverImage (using the computed property) -->
+      <div v-if="coverImage" class="image-container">
+        <img :src="coverImage" :alt="post.title" class="post-image" />
+        <!-- Badge for multiple images (if you added the computed property) -->
+        <div v-if="extraImagesCount > 0" class="more-images-badge">
+          +{{ extraImagesCount }}
+        </div>
+      </div>
 
+      <!-- Updated: comments -> comment_count -->
       <PostActions
-        :comments="post.comments"
+        :comments="post.comment_count"
         :post-id="post.id"
         @click.stop
       />

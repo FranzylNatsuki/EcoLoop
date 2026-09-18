@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { supabase } from '../../composables/useAuth' // Adjust path if necessary
 
 const props = defineProps<{
   modelValue: boolean
@@ -15,7 +16,9 @@ const selectedCategory = ref('Gardening')
 const title = ref('')
 const description = ref('')
 const imagePreviews = ref<string[]>([])
+const imageFiles = ref<File[]>([]) // NEW: Stores the actual files for upload
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const isSubmitting = ref(false) // NEW: UI loading state
 
 const categories = [
   'Gardening',
@@ -27,6 +30,7 @@ const categories = [
 
 // Modal visibility helpers
 function closeModal() {
+  if (isSubmitting.value) return // Prevent closing while uploading
   emit('update:modelValue', false)
 }
 
@@ -53,6 +57,10 @@ function handleFileUpload(event: Event) {
 
   const files = Array.from(target.files)
   files.forEach((file) => {
+    // Store the actual file for Supabase
+    imageFiles.value.push(file)
+
+    // Generate local preview for the UI
     const reader = new FileReader()
     reader.onload = (e) => {
       if (e.target?.result) {
@@ -65,24 +73,61 @@ function handleFileUpload(event: Event) {
 
 function removeImage(index: number) {
   imagePreviews.value.splice(index, 1)
+  imageFiles.value.splice(index, 1) // Keep both arrays in sync
 }
 
 // Form Submission
-function handleSubmit() {
+async function handleSubmit() {
   if (!title.value.trim() || !description.value.trim()) return
 
-  emit('publish', {
-    category: selectedCategory.value,
-    title: title.value,
-    description: description.value,
-    images: [...imagePreviews.value]
-  })
+  isSubmitting.value = true
+  const uploadedUrls: string[] = []
 
-  // Reset & close
-  title.value = ''
-  description.value = ''
-  imagePreviews.value = []
-  closeModal()
+  try {
+    // 1. Upload all images to Supabase Storage
+    for (const file of imageFiles.value) {
+      const fileExt = file.name.split('.').pop()
+      // Generate a random filename to avoid collisions
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`
+      const filePath = `post-images/${fileName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('images') // The name of your Supabase Storage bucket
+        .upload(filePath, file)
+
+      if (uploadError) {
+        console.error('Error uploading image:', uploadError.message)
+        continue // Skip this image and continue, or throw an error
+      }
+
+      // 2. Get the public URL for the database
+      const { data } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath)
+
+      uploadedUrls.push(data.publicUrl)
+    }
+
+    // 3. Emit the data with the live URLs
+    emit('publish', {
+      category: selectedCategory.value,
+      title: title.value,
+      description: description.value,
+      images: uploadedUrls
+    })
+
+    // 4. Reset & close
+    title.value = ''
+    description.value = ''
+    imagePreviews.value = []
+    imageFiles.value = []
+    emit('update:modelValue', false) // Use emit directly to bypass `isSubmitting` check
+
+  } catch (error) {
+    console.error('Submission failed:', error)
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 // Lifecycle Hooks for Escape key listener
@@ -217,21 +262,35 @@ onUnmounted(() => {
 
             <!-- Action Buttons -->
             <div class="action-group">
-              <button type="submit" class="submit-btn">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
+                <button
+                type="submit"
+                class="submit-btn"
+                :disabled="isSubmitting"
+                :style="{ opacity: isSubmitting ? 0.7 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }"
+                >
+                <!-- Loading Spinner when submitting -->
+                <svg v-if="isSubmitting" class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
                 </svg>
 
-                <span>Publish Post</span>
-              </button>
+                <!-- Normal icon when not submitting -->
+                <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                </svg>
 
-              <button type="button" class="cancel-btn" @click="closeModal">
+                <span>{{ isSubmitting ? 'Publishing...' : 'Publish Post' }}</span>
+                </button>
+
+                <button
+                type="button"
+                class="cancel-btn"
+                @click="closeModal"
+                :disabled="isSubmitting"
+                >
                 Cancel
-              </button>
+                </button>
             </div>
-
           </form>
-
         </div>
       </div>
     </Transition>
