@@ -29,22 +29,17 @@ cd ecoloop-web
 npm install
 ```
 
-3. run the json posts updater service
-```bash
-npx json-server --port 3001 src/data/db.json
-```
-
-4. run in dev mode and copy paste link (Localhost)
+3. run in dev mode and copy paste link (Localhost)
 ```bash
 npm run dev
 ```
 
-5. Open another terminal, return to the base folder and transfer to EcoLoop.Api
+4. Open another terminal, return to the base folder and transfer to EcoLoop.Api
 ```bash
 cd EcoLoop.Api
 ```
 
-6. Build and run C# server
+5. Build and run C# server
 ```bash
 dotnet build
 dotnet run
