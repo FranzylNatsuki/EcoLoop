@@ -22,6 +22,15 @@ const isLoading = ref(true)
 const isSubmittingComment = ref(false)
 const error = ref<string | null>(null)
 
+// 1. Store the logged-in user's ID
+const myId = ref<string | null>(null)
+
+// 2. Calculate if the active user owns this specific post
+const isOwner = computed(() => {
+  if (!myId.value || !post.value?.author_id) return false
+  return myId.value === post.value.author_id
+})
+
 async function fetchAuthorPostCount(authorId: string) {
   try {
     const { count, error } = await supabase
@@ -151,17 +160,22 @@ async function handleAddComment(content: string) {
     isSubmittingComment.value = false
   }
 }
-
 onMounted(async () => {
+  // Grab the active user session first!
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.user?.id) {
+    myId.value = session.user.id
+  }
+
   await fetchPostDetails()
 
-    // If we successfully loaded the post, fetch the author's true post count
-    if (post.value?.author_id) {
-      await fetchAuthorPostCount(post.value.author_id)
-    }
+  // If we successfully loaded the post, fetch the author's true post count
+  if (post.value?.author_id) {
+    await fetchAuthorPostCount(post.value.author_id)
+  }
 
-    await fetchComments()
-    isLoading.value = false
+  await fetchComments()
+  isLoading.value = false
 })
 
 // --- Computed Properties ---
@@ -247,7 +261,12 @@ const relatedPosts = computed(() => [])
     <template #main>
       <BackButton />
       <!-- Pass the sorted images along with the post data -->
-      <PostDetailHeader :post="post" :images="postImages" />
+      <!-- Pass is-owner down to the header! -->
+            <PostDetailHeader
+              :post="post"
+              :images="postImages"
+              :is-owner="isOwner"
+            />
 
       <PostMaterialList
         :materials="formattedMaterials"

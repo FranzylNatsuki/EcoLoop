@@ -28,8 +28,9 @@ interface Post {
 }
 
 const props = defineProps<{
-  post: Post,
-  images?: PostImage[] // Catch the passed images array
+  post: any
+  images: any[]
+  isOwner?: boolean // <-- Make sure this is here!
 }>()
 
 // Safely extract the avatar URL from the JSON object or fallback
@@ -92,7 +93,11 @@ const formattedDate = computed(() => {
       </div>
 
       <!-- Updated: comment_count -->
-      <PostActions :comments="post.comment_count" :hide-comments="true" />
+      <PostActions
+            :comments="post.comment_count"
+            :post-id="post.id"
+            :is-owner="isOwner"
+          />
     </div>
   </article>
 </template>

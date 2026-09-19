@@ -3,7 +3,11 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { MessageCircle, Share2, Bookmark } from 'lucide-vue-next'
 import DonateMaterialsModal from '../Modals/DonateMaterialsModal.vue'
-import ThankYouDonationModal from '../Modals/ThankYouDonationModal.vue'
+import EditPostModal from '../Modals/EditPostModal.vue'
+
+function handlePostUpdated() {
+  window.location.reload() // Quickest way to see changes!
+}
 
 const props = defineProps<{
   comments: number
@@ -21,6 +25,7 @@ const router = useRouter()
 // Modal Visibility Controls
 const showDonateModal = ref(false)
 const showThankYouModal = ref(false)
+const showEditModal = ref(false)
 
 // Donation Summary State
 const donationSummary = ref({
@@ -89,7 +94,7 @@ function handleBackToPost() {
       Donate
     </button>
 
-    <button v-if="isOwner" class="btn-manage">
+    <button v-if="isOwner" class="btn-manage" @click="showEditModal = true">
       Edit Post
     </button>
 
@@ -98,6 +103,12 @@ function handleBackToPost() {
       v-model="showDonateModal"
       :post-id="String(postId ?? '')"
       @submitted="handleDonationSubmitted"
+    />
+
+    <EditPostModal
+      v-model="showEditModal"
+      :post-id="String(postId ?? '')"
+      @updated="handlePostUpdated"
     />
 
     <!-- Step 2: Thank You Confirmation Modal -->
@@ -178,6 +189,7 @@ function handleBackToPost() {
   align-items: center;
   justify-content: center;
   white-space: nowrap;
+  margin-left: auto;
   transition: background-color 0.2s ease;
 }
 
@@ -187,7 +199,7 @@ function handleBackToPost() {
 /* Add this right below your .btn-donate CSS */
 .btn-manage {
   height: 32px;
-  padding: 0 30px;
+  padding: 0 45px;
   background: #f0f4ea;
   border: 1px solid #778732;
   border-radius: 8px;
@@ -198,6 +210,7 @@ function handleBackToPost() {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  margin-left: auto;
   transition: all 0.2s ease;
 }
 .btn-manage:hover {
