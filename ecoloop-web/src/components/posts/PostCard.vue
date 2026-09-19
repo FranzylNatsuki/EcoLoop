@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import { computed } from 'vue'
+import { useRouter} from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
 import VotePanel from './VotePanel.vue'
 import PostActions from './PostActions.vue'
+import { currentUserSession } from '../../composables/useAuth'
+import { supabase } from '../../composables/useAuth'
 
 // 1. Updated interface to match the Supabase data
 interface PostImage {
@@ -15,15 +17,39 @@ interface Post {
   title: string
   body: string
   post_images?: PostImage[]
-  vote_count: number       // Changed from votes
-  comment_count: number    // Changed from comments
+  vote_count: number
+  comment_count: number
   category: string
-  created_at: string       // Changed from createdAt
-  author: { full_name: string; Avatar: string } // Changed from name/avatar
+  created_at: string
+  author_id?: string       // <-- 1. Add author_id to the interface
+  author: {
+    id?: string;           // <-- Alternatively, it might be nested in the author object
+    full_name: string;
+    Avatar: string
+  }
 }
 
 const props = defineProps<{ post: Post }>()
 const router = useRouter()
+
+// 1. Store the logged-in user's ID locally in the component
+const myId = ref<string | null>(null)
+
+onMounted(async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.user?.id) {
+    myId.value = session.user.id
+  }
+})
+
+// 2. Check if the logged-in user owns this post
+const isOwner = computed(() => {
+  const postAuthorId = props.post.author_id || props.post.author?.id
+
+  if (!myId.value || !postAuthorId) return false
+
+  return myId.value === postAuthorId
+})
 
 // 2. Safely extract the first image to use as the cover
 const coverImage = computed(() => {
@@ -75,12 +101,12 @@ function openPost() {
         </div>
       </div>
 
-      <!-- Updated: comments -> comment_count -->
       <PostActions
-        :comments="post.comment_count"
-        :post-id="post.id"
-        @click.stop
-      />
+              :comments="post.comment_count"
+              :post-id="post.id"
+              :is-owner="isOwner"
+              @click.stop
+            />
     </div>
   </article>
 </template>

@@ -36,6 +36,7 @@ export interface Post {
   status: string
   created_at: string
   author: Author
+  author_id: string
   post_images?: PostImage[]
 
   // NOTE: If you want to keep these, you need to add them as JSONB

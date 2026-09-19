@@ -11,6 +11,7 @@ const props = defineProps<{
   hideComments?: boolean
   projectName?: string
   authorUsername?: string
+  isOwner?: boolean
 }>()
 
 defineEmits<{ share: []; save: []; donate: []; map: [] }>()
@@ -33,16 +34,28 @@ function openPost() {
   }
 }
 
+// SAFEGUARD: Don't open the modal if the post is from mock data
+function handleDonateClick() {
+  if (!props.postId || String(props.postId).length < 20) {
+    alert("Cannot donate to this post: It's using mock data without a real Database UUID.")
+    return
+  }
+  showDonateModal.value = true
+}
+
 // Called when DonateMaterialsModal emits 'submitted'
-function handleDonationSubmitted(payload: { quantity: number; materialName: string }) {
-  donationSummary.value = payload
+function handleDonationSubmitted(payload: { pledgeId: string; quantity: number; materialName: string }) {
+  console.log('Pledge created successfully with ID:', payload.pledgeId)
+  donationSummary.value = {
+    quantity: payload.quantity,
+    materialName: payload.materialName
+  }
   showDonateModal.value = false
   showThankYouModal.value = true
 }
 
-// Router actions for ThankYou modal callbacks
 function handleViewDonations() {
-  router.push('/profile') // Adjust to your preferred route (e.g. '/donations' or '/profile')
+  router.push('/profile')
 }
 
 function handleBackToPost() {
@@ -71,13 +84,19 @@ function handleBackToPost() {
       </button>
     </div>
 
-    <button class="btn-donate" @click="$emit('donate'); showDonateModal = true">
+    <!-- HIDE button if the user is the owner -->
+    <button v-if="!isOwner" class="btn-donate" @click="handleDonateClick">
       Donate
+    </button>
+
+    <button v-if="isOwner" class="btn-manage">
+      Edit Post
     </button>
 
     <!-- Step 1: Donation Form Modal -->
     <DonateMaterialsModal
       v-model="showDonateModal"
+      :post-id="String(postId ?? '')"
       @submitted="handleDonationSubmitted"
     />
 
@@ -164,5 +183,24 @@ function handleBackToPost() {
 
 .btn-donate:hover {
   background: #4f5b1d;
+}
+/* Add this right below your .btn-donate CSS */
+.btn-manage {
+  height: 32px;
+  padding: 0 30px;
+  background: #f0f4ea;
+  border: 1px solid #778732;
+  border-radius: 8px;
+  color: #778732;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+.btn-manage:hover {
+  background: #e4eadb;
 }
 </style>
