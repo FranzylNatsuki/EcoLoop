@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
+import MarketOnlyView from '../views/MarketOnlyView.vue'
 import HomeView from '../views/HomeView.vue'
 import EventsView from '../views/EventsView.vue'
 import MarketplaceView from '../views/MarketplaceView.vue'
@@ -8,6 +9,8 @@ import Registration from '../views/Registration.vue'
 import Profile from '../views/ProfileView.vue'
 import Login from '../views/Login.vue'
 import PublicProfileView from '../views/PublicProfileView.vue'
+import marketplaceactions from '../components/posts/PostActionsMarket.vue'
+import MarketCard from '../components/posts/MarketCard.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -64,7 +67,22 @@ const router = createRouter({
       path: '/user/:id', // Public read-only view (relies on URL ID)
       name: 'public-profile',
       component: PublicProfileView,
-    }
+    },
+    {
+      path: '/m/actions',
+      name: 'marketplaceactions',
+      component: marketplaceactions,
+    },
+    {
+      path: '/m/card',
+      name: 'mcard',
+      component: MarketCard,
+    },
+    {
+      path: '/debug-market',
+      name: 'debug-market',
+      component: MarketOnlyView,
+    },
   ],
 })
 
