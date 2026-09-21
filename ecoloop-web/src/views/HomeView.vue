@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import PageLayout from '../components/layout/PageLayout.vue'
 import CategoryBar from '../components/layout/CategoryBar.vue'
-import CreatePostBar from '../components/posts/CreatePostBar.vue'
+// import CreatePostBar from '../components/posts/CreatePostBar.vue'
 import PostCard from '../components/posts/PostCard.vue'
 import EventCard from '../components/posts/EventCard.vue'
 import CommunityRules from '../components/sidebar/CommunityRules.vue'
@@ -18,8 +18,6 @@ const feed = computed(() => [
   ...posts.value.map((p) => ({ kind: 'post' as const, item: p })),
   ...events.value.map((e) => ({ kind: 'event' as const, item: e })),
 ])
-
-const currentUserAvatar = 'https://placehold.co/38x38'
 </script>
 
 <template>
@@ -27,7 +25,7 @@ const currentUserAvatar = 'https://placehold.co/38x38'
     <CategoryBar />
     <PageLayout>
       <template #main>
-        <CreatePostBar :avatar="currentUserAvatar" />
+        <!-- <CreatePostBar :avatar="currentUserAvatar" /> -->
         <template v-for="entry in feed" :key="`${entry.kind}-${entry.item.id}`">
           <EventCard v-if="entry.kind === 'event'" :event="entry.item" />
           <PostCard v-else :post="entry.item" />

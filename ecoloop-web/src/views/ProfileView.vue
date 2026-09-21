@@ -6,11 +6,14 @@ import DonationHistoryCard from '../components/sidebar/DonationHistoryCard.vue'
 import SavedProjectsCard from '../components/sidebar/SavedProjectsCard.vue'
 import EditProfileModal from '../components/Modals/EditProfileModal.vue'
 import { usePosts } from '../composables/usePosts'
+import BackButton from '../components/common/BackButton.vue'
+import DonationCard from '../components/posts/DonationCard.vue'
 
 const activeTab = ref('posts')
 const profileData = ref<any>(null)
 const isLoading = ref(true)
 const isEditModalOpen = ref(false)
+const userPledges = ref<any[]>([])
 
 // Extract posts state and fetch method from composable
 const { posts } = usePosts()
@@ -33,6 +36,21 @@ onMounted(async () => {
       `)
       .eq('id', userId)
       .single()
+
+    const { data: pledgesData, error: pledgesError } = await supabase
+          .from('pledges')
+          .select(`
+            *,
+            post:cause_requests(title),
+            items:pledge_items(material_name, quantity, unit)
+          `)
+          .eq('donor_id', userId)
+          .eq('status', 'completed')
+          .order('created_at', { ascending: false })
+
+    if (!pledgesError && pledgesData) {
+      userPledges.value = pledgesData
+    }
 
     // 3. Log any database errors (like RLS or empty tables)
     if (error) {
@@ -164,7 +182,7 @@ const userPosts = computed(() => {
           </div>
           <!-- Dynamic Bio -->
           <p class="user-bio">
-            {{ profileData.profile_data?.about || 'No bio provided yet. 🌱' }}
+            {{ profileData.profile_data?.about || 'No bio provided yet.' }}
           </p>
         </div>
       </div>
@@ -223,20 +241,21 @@ const userPosts = computed(() => {
         >
           Saved Projects
         </button>
+        <!--
         <button
           class="tab-btn"
           :class="{ active: activeTab === 'settings' }"
           @click="activeTab = 'settings'"
         >
           Settings
-        </button>
+        </button> -->
       </nav>
     </header>
-
     <!-- Main Content Layout Area -->
     <div class="main-layout-wrapper">
       <!-- Left Feed Area -->
       <section class="left-feed-column">
+                  <BackButton />
         <template v-if="activeTab === 'posts'">
           <PostCard
             v-for="post in userPosts"
@@ -244,14 +263,26 @@ const userPosts = computed(() => {
             :post="post"
           />
         </template>
+
+        <template v-else-if="activeTab === 'donations'">
+                  <div v-if="userPledges.length === 0" class="empty-state">No completed donations yet.</div>
+                  <DonationCard
+                    v-for="pledge in userPledges"
+                    :key="pledge.id"
+                    :pledge="pledge"
+                  />
+                </template>
+
         <div v-else class="tab-placeholder-card">
           <p>Displaying {{ activeTab }} content...</p>
         </div>
+
+
       </section>
 
       <!-- Right Sidebar Area -->
       <aside class="right-sidebar-column">
-        <DonationHistoryCard />
+        <!--<DonationHistoryCard />-->
         <SavedProjectsCard />
       </aside>
     </div>

@@ -3,7 +3,6 @@ import { useRouter} from 'vue-router'
 import { computed, onMounted, ref } from 'vue'
 import VotePanel from './VotePanel.vue'
 import PostActions from './PostActions.vue'
-import { currentUserSession } from '../../composables/useAuth'
 import { supabase } from '../../composables/useAuth'
 
 // 1. Updated interface to match the Supabase data
@@ -105,6 +104,8 @@ function openPost() {
               :comments="post.comment_count"
               :post-id="post.id"
               :is-owner="isOwner"
+              :project-name="post.title"
+              :author-username="post.author.full_name"
               @click.stop
             />
     </div>

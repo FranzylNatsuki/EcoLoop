@@ -2,9 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../composables/useAuth'
+import { usePosts } from '../composables/usePosts'
 import PostCard from '../components/posts/PostCard.vue'
 import DonationHistoryCard from '../components/sidebar/DonationHistoryCard.vue'
-import { usePosts } from '../composables/usePosts'
+import BackButton from '../components/common/BackButton.vue'
+import DonationCard from '../components/posts/DonationCard.vue'
 
 const route = useRoute()
 const router = useRouter() // <--- Initialize it
@@ -16,6 +18,7 @@ const targetUserId = route.params.id as string
 const activeTab = ref('posts')
 const profileData = ref<any>(null)
 const isLoading = ref(true)
+const publicPledges = ref<any[]>([])
 
 // Extract posts state
 const { posts } = usePosts()
@@ -51,6 +54,21 @@ onMounted(async () => {
   if (data) {
     profileData.value = data
   }
+
+  const { data: pledgesData, error: pledgesError } = await supabase
+      .from('pledges')
+      .select(`
+        *,
+        post:cause_requests(title),
+        items:pledge_items(material_name, quantity, unit)
+      `)
+      .eq('donor_id', targetUserId)
+      .eq('status', 'completed') // Only show completed donations publicly
+      .order('created_at', { ascending: false })
+
+    if (!pledgesError && pledgesData) {
+      publicPledges.value = pledgesData
+    }
 
   isLoading.value = false
 })
@@ -96,7 +114,7 @@ const userPosts = computed(() => {
           </div>
 
           <p class="user-bio">
-            {{ profileData.profile_data?.about || 'No bio provided yet. 🌱' }}
+            {{ profileData.profile_data?.about || 'No bio provided yet.' }}
           </p>
         </div>
       </div>
@@ -150,12 +168,15 @@ const userPosts = computed(() => {
       </nav>
     </header>
 
+
     <div class="main-layout-wrapper">
       <section class="left-feed-column">
+                      <BackButton />
         <template v-if="activeTab === 'posts'">
           <div v-if="userPosts.length === 0" class="tab-placeholder-card">
             <p>This user hasn't posted anything yet.</p>
           </div>
+
           <PostCard
             v-else
             v-for="post in userPosts"
@@ -163,6 +184,19 @@ const userPosts = computed(() => {
             :post="post"
           />
         </template>
+
+        <template v-else-if="activeTab === 'donations'">
+                  <div v-if="publicPledges.length === 0" class="tab-placeholder-card">
+                    <p>No recent activity to display.</p>
+                  </div>
+
+                  <DonationCard
+                    v-else
+                    v-for="pledge in publicPledges"
+                    :key="pledge.id"
+                    :pledge="pledge"
+                  />
+                </template>
 
         <div v-else class="tab-placeholder-card">
           <p>No recent activity to display.</p>

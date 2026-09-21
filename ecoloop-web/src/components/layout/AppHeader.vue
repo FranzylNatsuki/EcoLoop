@@ -4,6 +4,10 @@ import { BellRing, ChevronDown, User, LogOut } from 'lucide-vue-next'
 import CreatePostButton from './CreatePostButton.vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '../../composables/useAuth' // Import the Supabase client
+import NotificationDropdown from './NotificationDropdown.vue'
+
+const isNotifOpen = ref(false)
+const notifDropdownRef = ref<HTMLElement | null>(null)
 
 const router = useRouter()
 const isDropdownOpen = ref(false)
@@ -30,6 +34,12 @@ onMounted(async () => {
     }
   }
 })
+
+
+const toggleNotifDropdown = () => {
+  isNotifOpen.value = !isNotifOpen.value
+  isDropdownOpen.value = false // Close profile menu if open
+}
 
 // Toggle profile menu
 const toggleDropdown = () => {
@@ -94,10 +104,16 @@ onUnmounted(() => {
         <CreatePostButton />
 
         <!-- Notification Button -->
-        <button class="icon-btn">
-          <BellRing :size="18" />
-        </button>
+        <!-- Update the Notification Button in your template -->
+        <div class="profile-menu-container" ref="notifDropdownRef">
+          <button class="icon-btn" @click="toggleNotifDropdown">
+            <BellRing :size="18" />
+          </button>
 
+          <transition name="dropdown-fade">
+            <NotificationDropdown v-if="isNotifOpen" />
+          </transition>
+        </div>
         <!-- Profile Menu Wrapper -->
         <div class="profile-menu-container" ref="dropdownRef">
             <button class="profile" @click="toggleDropdown" :aria-expanded="isDropdownOpen">

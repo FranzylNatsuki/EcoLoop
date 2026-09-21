@@ -4,19 +4,15 @@ import { ref, watch } from 'vue'
 // Vue 3.4+ v-model wrapper for open/close state
 const isOpen = defineModel<boolean>({ default: false })
 
-// Props for custom donation details (falls back to Figma defaults if empty)
+// Props for custom donation details
 const props = withDefaults(
   defineProps<{
-    quantity?: number | string
-    materialName?: string
     projectName?: string
     authorUsername?: string
   }>(),
   {
-    quantity: 5,
-    materialName: 'glass bottles',
-    projectName: 'outdoor potting project',
-    authorUsername: 'u/nature_craft'
+    projectName: 'project',
+    authorUsername: 'the author'
   }
 )
 
@@ -73,7 +69,7 @@ function handleBackToPost() {
         <div class="title-group">
           <h2 class="title">Thank You for Donating!</h2>
           <p class="subtitle">
-            You will receive confirmation on your notifications page.
+            We have notified the poster about your pledge.
           </p>
         </div>
 
@@ -87,7 +83,7 @@ function handleBackToPost() {
             </svg>
           </div>
           <p class="summary-text">
-            You donated <span class="highlight">{{ props.quantity }} {{ props.materialName }}</span> to the {{ props.projectName }} by <span class="author">{{ props.authorUsername }}</span>
+            Thanks for pledging to <span class="highlight">"{{ props.projectName }}"</span> by <span class="author">{{ props.authorUsername }}</span>! You can track the status of this donation in your notifications.
           </p>
         </div>
 

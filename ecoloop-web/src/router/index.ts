@@ -83,6 +83,11 @@ const router = createRouter({
       name: 'debug-market',
       component: MarketOnlyView,
     },
+    {
+      path: '/pledge/:id',
+      name: 'pledgedetail',
+      component: () => import('../views/PledgeDetailView.vue'),
+    },
   ],
 })
 
