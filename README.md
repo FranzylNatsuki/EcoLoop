@@ -74,13 +74,19 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * PageLayout.vue - defined layout preset vue file
 * SeeEventsButton.vue  
 * CreatePostButton.vue
+* NotificationDropdown.vue
+* NotificationItem.vue
+* ProfileLayout.vue
 
 `src/components/navigation` *navigation presets*
 * SidebarNavigation.vue
 
 `src/components/posts` *homepage posts components*
 * CreatePostBar.vue - + Create Post Button
+* DonationCard.vue
+* MarketCard.vue
 * PostActions.vue - comments, donate, etc.
+* PostActionsMarket.vue
 * PostCard.vue - Post component
 * EventCard.vue - Event component card
 * VotePanel.vue - reddit votes ahh
@@ -123,13 +129,18 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * RequestMaterialsModal.vue
 * ThankYouDonationModal.vue
 * EditProfileModal.vue
+* EditPostModal.vue
+* MarketplaceInquiryModal.vue
+* CreateMarketplaceModal.vue
 
 `src/views` *individual pages*
 * HomeView.vue - home page component
 * EventsView.vue - events page component
 * MarketplaceView.vue - marketplace page
 * PostDetailView.vue - enlarged posts once clicked
+* PledgeDetailView.vue
 * ProfileView.vue
+* PublicProfile.vue
 * Login.vue
 * Registration.vue
 
