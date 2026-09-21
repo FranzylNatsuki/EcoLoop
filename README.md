@@ -13,6 +13,12 @@ Codebase for EcoLoop website for CCS-6. Full techstack specifications:
 Deployed Site:
 `ecoloop.runasp.net`
 
+Leftover To Do:
+* Google Auth
+* Location API For Profile Data
+* UI stuff adjustments.
+* Recommendation System
+
 ### Figma
 *Based on*:
 https://www.figma.com/design/PKSdF5zZNxwBqm1AotJfBJ/EcoLoo?node-id=1-1255&t=J2YowMGp3bxCLtYy-1 

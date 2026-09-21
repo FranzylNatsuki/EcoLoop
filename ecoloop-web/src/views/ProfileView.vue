@@ -99,13 +99,15 @@ const handleSaveProfile = async (updatedData: any) => {
   }
 
   // 2. Update profiles table
-  const { error: profileError } = await supabase.from('profiles')
-    .update({
-      full_name: updatedData.fullName,
-      location: updatedData.location,
-      contact_number: updatedData.contact
-    })
-    .eq('id', userId)
+    const { error: profileError } = await supabase.from('profiles')
+      .update({
+        full_name: updatedData.fullName,
+        location: updatedData.location,
+        contact_number: updatedData.contact,
+        latitude: updatedData.latitude,   // Added!
+        longitude: updatedData.longitude  // Added!
+      })
+      .eq('id', userId)
 
   if (profileError) console.error("Profile Update Error:", profileError.message)
 

@@ -1,14 +1,29 @@
-<!--Registration.vue-->
-
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { supabase } from '../composables/useAuth' // Import the Supabase client
+import { supabase } from '../composables/useAuth'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+// --- Vite Leaflet Icon Fix ---
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow
+})
 
 const router = useRouter()
 
+// --- Step Management ---
+const currentStep = ref<1 | 2>(1)
+const formStep1Ref = ref<HTMLFormElement | null>(null)
+
+// --- Step 1 States (Info) ---
 const fullName = ref('')
-const location = ref('')
 const contactNumber = ref('')
 const email = ref('')
 const password = ref('')
@@ -18,77 +33,178 @@ const isOrganization = ref(false)
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 
+// --- Step 2 States (Location) ---
+const locationAddress = ref('')
+const latitude = ref<number | null>(null)
+const longitude = ref<number | null>(null)
+const mapContainer = ref<HTMLElement | null>(null)
+let mapInstance: L.Map | null = null
+let markerInstance: L.Marker | null = null
+
+// --- Submission State ---
 const isSubmitting = ref(false)
 const errorMessage = ref('')
 
-const togglePasswordVisibility = () => {
-  showPassword.value = !showPassword.value
-}
+const togglePasswordVisibility = () => showPassword.value = !showPassword.value
+const toggleConfirmPasswordVisibility = () => showConfirmPassword.value = !showConfirmPassword.value
 
-const toggleConfirmPasswordVisibility = () => {
-  showConfirmPassword.value = !showConfirmPassword.value
-}
-
-const handleRegister = async () => {
-  if (isSubmitting.value) return
+// --- Proceed to Step 2 ---
+const goToStep2 = async () => {
   errorMessage.value = ''
+
+  // Use HTML5 form validation to ensure step 1 is filled out correctly
+  if (!formStep1Ref.value?.checkValidity()) {
+    formStep1Ref.value?.reportValidity()
+    return
+  }
 
   if (password.value !== confirmPassword.value) {
     errorMessage.value = 'Passwords do not match.'
     return
   }
 
+  // Switch to Step 2
+  currentStep.value = 2
+
+  // Give Vue a moment to render the map container, then initialize Leaflet
+  await nextTick()
+  setTimeout(() => initMap(), 150)
+}
+
+const goBackToStep1 = () => {
+  currentStep.value = 1
+  errorMessage.value = ''
+}
+
+// --- Initialize Leaflet Map ---
+const initMap = () => {
+  if (!mapContainer.value) return
+
+  if (mapInstance) {
+    mapInstance.remove()
+    mapInstance = null
+    markerInstance = null
+  }
+
+  // Center on Dumaguete City by default
+  const defaultLat = 9.3068
+  const defaultLng = 123.3054
+
+  mapInstance = L.map(mapContainer.value).setView([defaultLat, defaultLng], 14)
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 19
+  }).addTo(mapInstance)
+
+  // Draw initial marker if they already clicked once and went back
+  if (latitude.value && longitude.value) {
+    markerInstance = L.marker([latitude.value, longitude.value]).addTo(mapInstance)
+  }
+
+  mapInstance.on('click', (e: L.LeafletMouseEvent) => {
+    const { lat, lng } = e.latlng
+    latitude.value = lat
+    longitude.value = lng
+
+    if (!markerInstance) {
+      markerInstance = L.marker([lat, lng]).addTo(mapInstance!)
+    } else {
+      markerInstance.setLatLng([lat, lng])
+    }
+  })
+
+  setTimeout(() => {
+    if (mapInstance) mapInstance.invalidateSize()
+  }, 250)
+}
+
+// --- Final Registration Submission ---
+const handleRegister = async () => {
+  if (isSubmitting.value) return
+  errorMessage.value = ''
+
+  if (!latitude.value || !longitude.value) {
+    errorMessage.value = 'Please click on the map to set your location pin.'
+    return
+  }
+
+  if (!locationAddress.value.trim()) {
+    errorMessage.value = 'Please provide a text address.'
+    return
+  }
+
   isSubmitting.value = true
 
   try {
-    // Register the user with Supabase, passing extra metadata for the DB trigger
-    const { data, error } = await supabase.auth.signUp({
-      email: email.value,
-      password: password.value,
-      options: {
-        data: {
-          full_name: fullName.value,
-          location: location.value,
-          contact_number: contactNumber.value,
-          is_org: isOrganization.value,
+      isSubmitting.value = true
+
+      // 1. THIS IS ALL YOU NEED.
+      // Sending the data here triggers your SQL handle_new_user function automatically.
+      const { data, error } = await supabase.auth.signUp({
+        email: email.value,
+        password: password.value,
+        options: {
+          data: {
+            full_name: fullName.value,
+            location: locationAddress.value,
+            contact_number: contactNumber.value,
+            is_org: isOrganization.value,
+            // Add these only if you added them to your SQL trigger
+            latitude: latitude.value,
+            longitude: longitude.value,
+            address: locationAddress.value
+          }
         }
-      }
-    })
+      })
+
+      if (error) throw error
 
     if (data?.user) {
-      // Manually insert into public.profiles
-      await supabase.from('profiles').insert({
+      // 2. Insert into profiles AND CHECK FOR ERRORS
+      const { error: profileError } = await supabase.from('profiles').insert({
         id: data.user.id,
         full_name: fullName.value,
-        location: location.value,
+        location: locationAddress.value,
+        address: locationAddress.value,
         contact_number: contactNumber.value,
         is_org: isOrganization.value,
+        latitude: latitude.value,
+        longitude: longitude.value
       })
+
+      if (profileError) {
+        console.error("🚨 PROFILES DATABASE ERROR:", profileError.message, profileError.details)
+      }
+
+      // 3. Initialize profile_data AND CHECK FOR ERRORS
+      const { error: dataError } = await supabase.from('profile_data').upsert({
+        id: data.user.id,
+        about: '',
+        Avatar: '',
+        ItemsDonated: 0,
+        ProjectsSupported: 0,
+        MaterialsCollected: 0,
+        CommunityScore: 0
+      })
+
+      if (dataError) {
+        console.error("🚨 PROFILE_DATA DATABASE ERROR:", dataError.message, dataError.details)
+      }
     }
 
-    if (error) {
-      errorMessage.value = error.message
-      return
-    }
-
-    // Success! Supabase automatically handles the tokens.
     router.push('/home')
-  } catch (err) {
-    errorMessage.value = 'Could not reach the server. Please check your connection.'
+  } catch (err: any) {
+    errorMessage.value = err.message || 'Could not reach the server. Please check your connection.'
     console.error(err)
   } finally {
     isSubmitting.value = false
   }
 }
-
-const handleGoogleAuth = () => {
-  console.log('Google Auth Triggered')
-}
 </script>
 
 <template>
   <div class="registration-page">
-    <!-- Left Background Illustration Card -->
     <div class="bg-illustration left">
       <img
         class="illustration-img"
@@ -103,7 +219,6 @@ const handleGoogleAuth = () => {
       </div>
     </div>
 
-    <!-- Right Background Illustration Card -->
     <div class="bg-illustration right">
       <img
         class="illustration-img"
@@ -118,9 +233,7 @@ const handleGoogleAuth = () => {
       </div>
     </div>
 
-    <!-- Registration Main Card -->
     <div class="registration-card">
-      <!-- Header Section -->
       <div class="card-header">
         <div class="brand-logo-icon">
             <svg width="64" height="41" viewBox="0 0 64 41" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -131,13 +244,18 @@ const handleGoogleAuth = () => {
         </div>
         <div class="header-titles">
           <h1 class="title">Create Account</h1>
-          <p class="subtitle"> Get in the Loop. Connect with your local green community.</p>
+          <p v-if="currentStep === 1" class="subtitle"> Step 1 of 2: Basic Information</p>
+          <p v-if="currentStep === 2" class="subtitle"> Step 2 of 2: Set Location</p>
         </div>
       </div>
 
-      <!-- Registration Form -->
-      <form class="registration-form" @submit.prevent="handleRegister">
-        <!-- Full Name / Org Name -->
+      <div class="step-indicator">
+        <div class="step-bar" :class="{ active: currentStep >= 1 }"></div>
+        <div class="step-bar" :class="{ active: currentStep === 2 }"></div>
+      </div>
+
+      <!-- ================= STEP 1: Basic Info ================= -->
+      <form v-if="currentStep === 1" class="registration-form" ref="formStep1Ref" @submit.prevent="goToStep2">
         <div class="form-group">
           <label for="fullName">{{ isOrganization ? 'Organization / Business Name' : 'Full Name' }}</label>
           <div class="input-wrapper">
@@ -151,21 +269,6 @@ const handleGoogleAuth = () => {
           </div>
         </div>
 
-        <!-- Location / Barangay -->
-        <div class="form-group">
-          <label for="location">Location / Barangay</label>
-          <div class="input-wrapper">
-            <input
-              id="location"
-              v-model="location"
-              type="text"
-              placeholder="Daro, Dumaguete City"
-              required
-            />
-          </div>
-        </div>
-
-        <!-- Contact Number Field -->
         <div class="form-group">
           <label for="contactNumber">Contact Number</label>
           <div class="input-wrapper phone-wrapper">
@@ -181,7 +284,6 @@ const handleGoogleAuth = () => {
           </div>
         </div>
 
-        <!-- Email Address -->
         <div class="form-group">
           <label for="email">Email Address</label>
           <div class="input-wrapper">
@@ -195,7 +297,6 @@ const handleGoogleAuth = () => {
           </div>
         </div>
 
-        <!-- Password -->
         <div class="form-group">
           <label for="password">Password</label>
           <div class="input-wrapper">
@@ -206,22 +307,8 @@ const handleGoogleAuth = () => {
               placeholder="••••••••"
               required
             />
-            <button
-              type="button"
-              class="eye-btn"
-              aria-label="Toggle password visibility"
-              @click="togglePasswordVisibility"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#8F9A8F"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
+            <button type="button" class="eye-btn" @click="togglePasswordVisibility">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
@@ -229,7 +316,6 @@ const handleGoogleAuth = () => {
           </div>
         </div>
 
-        <!-- Confirm Password -->
         <div class="form-group">
           <label for="confirmPassword">Confirm Password</label>
           <div class="input-wrapper">
@@ -240,22 +326,8 @@ const handleGoogleAuth = () => {
               placeholder="••••••••"
               required
             />
-            <button
-              type="button"
-              class="eye-btn"
-              aria-label="Toggle confirm password visibility"
-              @click="toggleConfirmPasswordVisibility"
-            >
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#8F9A8F"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
+            <button type="button" class="eye-btn" @click="toggleConfirmPasswordVisibility">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                 <circle cx="12" cy="12" r="3"></circle>
               </svg>
@@ -263,7 +335,6 @@ const handleGoogleAuth = () => {
           </div>
         </div>
 
-        <!-- Organization Checkbox -->
         <div class="checkbox-group">
           <label class="checkbox-container">
             <input type="checkbox" v-model="isOrganization" />
@@ -275,32 +346,53 @@ const handleGoogleAuth = () => {
         <p v-if="errorMessage" style="color: #D64545; font-size: 13px; margin: 0;">
           {{ errorMessage }}
         </p>
-        <!-- Action Buttons -->
+
         <div class="actions">
-            <button type="submit" class="btn-register" :class="{ 'btn-org': isOrganization }" :disabled="isSubmitting">
-              {{ isSubmitting ? 'Creating account...' : (isOrganization ? 'Sign Up as Organization' : 'Create Account') }}
+            <button type="submit" class="btn-register" :class="{ 'btn-org': isOrganization }">
+              Next: Set Location
             </button>
+        </div>
+      </form>
 
-            <span style="align-self: center;">or continue with</span>
+      <!-- ================= STEP 2: Location Map ================= -->
+      <form v-if="currentStep === 2" class="registration-form" @submit.prevent="handleRegister">
+        <div class="form-group map-group">
+          <div class="section-label-row">
+            <label class="form-label">Drop a Pin</label>
+            <span v-if="latitude" class="text-hint" style="color:#778732;">Pin dropped!</span>
+            <span v-else class="text-hint" style="color:#6b7280;">Click map to place pin</span>
+          </div>
 
-          <button
-            type="button"
-            class="btn-social"
-            @click="handleGoogleAuth"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#1A1D1A"
-              stroke-width="2"
-            >
-              <circle cx="12" cy="12" r="10"></circle>
-              <path d="M12 8v8M8 12h8"></path>
-            </svg>
-            Google
-          </button>
+          <div class="map-wrapper">
+            <div ref="mapContainer" class="map-preview"></div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="locationAddress">Specific Address Details</label>
+          <div class="input-wrapper">
+            <input
+              id="locationAddress"
+              v-model="locationAddress"
+              type="text"
+              placeholder="e.g. Daro, Dumaguete City, near City Hall"
+              required
+            />
+          </div>
+        </div>
+
+        <p v-if="errorMessage" style="color: #D64545; font-size: 13px; margin: 0;">
+          {{ errorMessage }}
+        </p>
+
+        <div class="actions two-buttons">
+            <button type="button" class="btn-back" @click="goBackToStep1" :disabled="isSubmitting">
+              Back
+            </button>
+            <button type="submit" class="btn-register" :class="{ 'btn-org': isOrganization }" :disabled="isSubmitting">
+              <span v-if="isSubmitting">Creating account...</span>
+              <span v-else>Complete Registration</span>
+            </button>
         </div>
       </form>
 
@@ -316,306 +408,203 @@ const handleGoogleAuth = () => {
 </template>
 
 <style scoped>
-/* Page Wrapper */
+/* Base Structure */
 .registration-page {
-  width: 100%;
-  min-height: 100vh;
-  padding: 80px 24px;
   position: relative;
-  background-color: #F7F8F6;
+  width: 100vw;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  box-sizing: border-box;
+  background-color: #F7F8F6;
+  font-family: 'Outfit', sans-serif;
+  overflow: hidden;
 }
 
-/* Side Illustration Floating Cards */
 .bg-illustration {
-  width: 320px;
-  padding: 24px;
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  background: white;
-  box-shadow: 0px 8px 24px rgba(26, 29, 26, 0.04);
-  border-radius: 24px;
-  border: 1px solid #E4E7E3;
+  width: 320px;
+  height: 480px;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0px 20px 40px rgba(26, 29, 26, 0.08);
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
-.bg-illustration.left {
-  left: 60px;
-}
-
-.bg-illustration.right {
-  right: 60px;
-}
+.bg-illustration.left { left: 10%; }
+.bg-illustration.right { right: 10%; }
 
 .illustration-img {
   width: 100%;
-  height: 200px;
+  height: 70%;
   object-fit: cover;
-  border-radius: 16px;
 }
 
 .illustration-text {
+  height: 30%;
+  background: #ffffff;
+  padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
 }
 
 .illustration-title {
   margin: 0;
+  font-size: 18px;
+  font-weight: 700;
   color: #1A1D1A;
-  font-size: 16px;
-  font-family: 'Outfit', sans-serif;
-  font-weight: 600;
 }
 
 .illustration-description {
   margin: 0;
-  color: #525A52;
-  font-size: 13px;
-  font-family: 'Geist', sans-serif;
-  font-weight: 400;
+  font-size: 14px;
+  color: #8F9A8F;
   line-height: 1.4;
+  font-family: 'Geist', sans-serif;
 }
 
-/* Registration Card Component */
 .registration-card {
+  position: relative;
+  z-index: 10;
   width: 100%;
-  max-width: 538px;
+  max-width: 480px;
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0px 24px 48px rgba(26, 29, 26, 0.12);
   padding: 40px;
-  background: white;
-  box-shadow: 0px 12px 32px rgba(26, 29, 26, 0.06);
-  border-radius: 24px;
-  border: 1px solid #E4E7E3;
   display: flex;
   flex-direction: column;
-  gap: 28px;
-  z-index: 10;
+  gap: 32px;
 }
 
+/* Header */
 .card-header {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
+  text-align: center;
 }
-
 .brand-logo-icon {
-  color: #778732;
+  width: 48px;
+  height: 48px;
+  background: #F7F8F6;
+  border-radius: 12px;
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
 }
-
 .header-titles {
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 8px;
-  text-align: center;
 }
-
 .title {
   margin: 0;
-  color: #1A1D1A;
-  font-size: 32px;
-  font-family: 'Outfit', sans-serif;
+  font-size: 28px;
   font-weight: 700;
+  color: #1A1D1A;
 }
-
 .subtitle {
   margin: 0;
-  color: #525A52;
-  font-size: 14px;
+  font-size: 15px;
+  color: #8F9A8F;
   font-family: 'Geist', sans-serif;
-  font-weight: 400;
-  line-height: 1.5;
 }
 
-/* Form Styling */
+/* Step Bar */
+.step-indicator {
+  display: flex;
+  gap: 8px;
+  margin-top: -16px;
+  margin-bottom: 8px;
+}
+.step-bar {
+  flex: 1;
+  height: 4px;
+  background: #E4E7E3;
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+.step-bar.active { background: #778732; }
+
+/* Form Fields */
 .registration-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
-
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
-
-.form-group label {
-  color: #525A52;
-  font-size: 13px;
-  font-family: 'Outfit', sans-serif;
+label {
+  font-size: 14px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: #1A1D1A;
 }
-
 .input-wrapper {
+  position: relative;
   display: flex;
   align-items: center;
+}
+input {
+  width: 100%;
   padding: 12px 16px;
   background: #F7F8F6;
-  border-radius: 12px;
   border: 1px solid #E4E7E3;
-}
-
-.input-wrapper input {
-  width: 100%;
-  border: none;
-  background: transparent;
+  border-radius: 8px;
+  font-family: 'Geist', sans-serif;
+  font-size: 15px;
+  color: #1A1D1A;
+  transition: border-color 0.2s, background-color 0.2s;
   outline: none;
-  color: #1A1D1A;
-  font-size: 14px;
-  font-family: 'Geist', sans-serif;
-  font-weight: 400;
 }
-
-.input-wrapper input::placeholder {
-  color: #8F9A8F;
+input:focus {
+  background: #ffffff;
+  border-color: #778732;
 }
-
+input::placeholder { color: #8F9A8F; }
 .eye-btn {
-  background: none;
+  position: absolute;
+  right: 16px;
+  background: transparent;
   border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
   padding: 0;
-  margin: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
 }
-
-/* Actions Section */
-.actions {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 8px;
-}
-
-.btn-register {
-  width: 100%;
-  padding: 14px;
-  background: #778732;
-  border: none;
-  border-radius: 12px;
-  color: white;
-  font-size: 15px;
-  font-family: 'Outfit', sans-serif;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.btn-register:hover {
-  background: #647328;
-}
-
-.divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 0;
-}
-
-.divider .line {
-  flex: 1;
-  height: 1px;
-  background: #E4E7E3;
-}
-
-.divider span {
-  color: #8F9A8F;
-  font-size: 13px;
-  font-family: 'Geist', sans-serif;
-}
-
-.btn-social {
-  width: 100%;
+.phone-wrapper { gap: 12px; }
+.phone-prefix {
   padding: 12px 16px;
-  background: white;
+  background: #F7F8F6;
   border: 1px solid #E4E7E3;
-  border-radius: 12px;
-  color: #1A1D1A;
-  font-size: 15px;
+  border-radius: 8px;
   font-family: 'Outfit', sans-serif;
   font-weight: 600;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
+  color: #8F9A8F;
 }
 
-.btn-social:hover {
-  background-color: #f8f9fa;
-}
-
-/* Footer Section */
-.card-footer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 4px;
-  color: #525A52;
-  font-size: 14px;
-  font-family: 'Geist', sans-serif;
-}
-
-.signin-link {
-  color: #778732;
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.signin-link:hover {
-  text-decoration: underline;
-}
-
-/* Responsive Styles */
-@media (max-width: 1200px) {
-  .bg-illustration {
-    display: none;
-  }
-}
-
-@media (max-width: 600px) {
-  .registration-page {
-    padding: 24px 16px;
-  }
-
-  .registration-card {
-    padding: 24px 20px;
-  }
-}
-
-.checkbox-group {
-  display: flex;
-  align-items: center;
-  padding: 4px 0;
-}
-
+/* Checkbox */
+.checkbox-group { margin-top: 4px; }
 .checkbox-container {
   display: flex;
   align-items: center;
   position: relative;
   padding-left: 28px;
   cursor: pointer;
-  font-size: 13px;
-  font-family: 'Geist', sans-serif;
+  font-size: 14px;
   color: #525A52;
   user-select: none;
+  line-height: 1.4;
 }
-
 .checkbox-container input {
   position: absolute;
   opacity: 0;
@@ -623,59 +612,118 @@ const handleGoogleAuth = () => {
   height: 0;
   width: 0;
 }
-
 .checkmark {
   position: absolute;
-  top: 0;
   left: 0;
+  top: 50%;
+  transform: translateY(-50%);
   height: 18px;
   width: 18px;
   background-color: #F7F8F6;
-  border: 1px solid #E4E7E3;
-  border-radius: 6px;
-  transition: all 0.2s ease;
+  border: 1.5px solid #E4E7E3;
+  border-radius: 4px;
+  transition: all 0.2s;
 }
-
-.checkbox-container:hover input ~ .checkmark {
-  background-color: #E8F0E8;
-}
-
+.checkbox-container:hover input ~ .checkmark { border-color: #778732; }
 .checkbox-container input:checked ~ .checkmark {
   background-color: #778732;
   border-color: #778732;
 }
-
 .checkmark:after {
   content: "";
   position: absolute;
   display: none;
-}
-
-.checkbox-container input:checked ~ .checkmark:after {
-  display: block;
-}
-
-.checkbox-container .checkmark:after {
-  left: 6px;
+  left: 5px;
   top: 2px;
   width: 4px;
-  height: 9px;
+  height: 8px;
   border: solid white;
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
 }
+.checkbox-container input:checked ~ .checkmark:after { display: block; }
 
-.checkbox-label {
-  line-height: 1.4;
+/* Buttons */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
 }
-
-/* Optional Org Button Highlight Modifier */
-.btn-register.btn-org {
+.actions.two-buttons {
+  flex-direction: row;
+}
+.btn-register {
+  width: 100%;
+  padding: 14px;
   background: #778732;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.2s, opacity 0.2s;
+}
+.btn-register:hover:not(:disabled) { background: #616F28; }
+.btn-register.btn-org { background: #1A1D1A; }
+.btn-register.btn-org:hover:not(:disabled) { background: #2B302B; }
+.btn-register:disabled { opacity: 0.7; cursor: not-allowed; }
+
+.btn-back {
+  padding: 14px 24px;
+  background: #F3F4F6;
+  color: #374151;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.btn-back:hover { background: #E5E7EB; }
+
+/* Footer */
+.card-footer {
+  text-align: center;
+  font-family: 'Geist', sans-serif;
+  font-size: 14px;
+}
+.footer-text { color: #8F9A8F; }
+.login-link {
+  color: #778732;
+  font-weight: 600;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.login-link:hover { color: #1A1D1A; }
+
+/* Leaflet Map Styles */
+.section-label-row { display: flex; justify-content: space-between; align-items: center; }
+.text-hint { font-size: 12px; font-weight: 500; }
+.map-wrapper {
+  width: 100%;
+  height: 250px;
+  min-height: 250px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e4e7e3;
+  z-index: 1; /* Keeps Leaflet underneath the modals and alerts */
+}
+.map-preview { width: 100%; height: 100%; }
+
+@media (max-width: 1200px) {
+  .bg-illustration { display: none; }
 }
 
-.btn-register.btn-org:hover {
-  background: #246328;
+@media (max-width: 600px) {
+  .registration-card {
+    border-radius: 0;
+    box-shadow: none;
+    padding: 32px 24px;
+    min-height: 100vh;
+  }
 }
-
 </style>
