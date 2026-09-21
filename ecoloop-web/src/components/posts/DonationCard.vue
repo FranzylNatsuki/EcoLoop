@@ -47,7 +47,7 @@ const itemSummary = computed(() => {
     <div class="card-content">
       <div class="card-header">
         <h4 class="project-title">Supported: {{ pledge.post?.title || 'Unknown Project' }}</h4>
-        <span class="status-badge">Completed</span>
+        <span class="status-badge" :class="pledge.status">{{ pledge.status }}</span>
       </div>
 
       <p class="pledge-title">"{{ pledge.title }}"</p>
@@ -131,4 +131,8 @@ const itemSummary = computed(() => {
   font-weight: 500;
   color: #525A52;
 }
+.status-badge.pending { background: #fff3cd; color: #856404; }
+.status-badge.active { background: #d4edda; color: #155724; }
+.status-badge.completed { background: #cce5ff; color: #004085; }
+.status-badge.rejected { background: #f8d7da; color: #721c24; }
 </style>

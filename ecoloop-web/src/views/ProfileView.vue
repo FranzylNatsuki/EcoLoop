@@ -45,7 +45,6 @@ onMounted(async () => {
             items:pledge_items(material_name, quantity, unit)
           `)
           .eq('donor_id', userId)
-          .eq('status', 'completed')
           .order('created_at', { ascending: false })
 
     if (!pledgesError && pledgesData) {

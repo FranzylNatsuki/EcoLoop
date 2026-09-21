@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../composables/useAuth'
 import L from 'leaflet'
@@ -19,15 +19,27 @@ L.Icon.Default.mergeOptions({
 
 const route = useRoute()
 const router = useRouter()
-const pledgeId = route.params.id as string
 
 const pledge = ref<any>(null)
 const isLoading = ref(true)
+const isUpdating = ref(false)
 const errorMessage = ref<string | null>(null)
+const currentUserId = ref<string | null>(null)
 
-// Map State
+// --- Inline Confirmation Modal State ---
+const confirmDialog = ref({
+  isOpen: false,
+  action: '' as 'confirmed' | 'completed' | 'cancelled',
+  title: '',
+  message: '',
+  confirmText: '',
+  btnClass: ''
+})
+
+// --- Map State ---
 const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: L.Map | null = null
+const isMapExpanded = ref(false)
 
 const fetchPledgeDetails = async (id: string) => {
   if (!id) return
@@ -35,13 +47,17 @@ const fetchPledgeDetails = async (id: string) => {
   errorMessage.value = null
 
   try {
+    const { data: { session } } = await supabase.auth.getSession()
+    currentUserId.value = session?.user.id || null
+
     const { data, error } = await supabase
       .from('pledges')
       .select(`
         *,
         donor:profiles!pledges_donor_id_fkey(full_name, email),
-        post:cause_requests!pledges_post_id_fkey(title),
-        items:pledge_items(*)
+        post:cause_requests!pledges_post_id_fkey(title, author_id),
+        items:pledge_items(*),
+        images:pledge_images(image_url)
       `)
       .eq('id', id)
       .single()
@@ -50,8 +66,9 @@ const fetchPledgeDetails = async (id: string) => {
     pledge.value = data
 
     if (pledge.value.latitude && pledge.value.longitude) {
-      await nextTick()
-      initMap(pledge.value.latitude, pledge.value.longitude)
+      setTimeout(() => {
+        initMap(pledge.value.latitude, pledge.value.longitude)
+      }, 150)
     }
   } catch (err: any) {
     errorMessage.value = err.message || 'Failed to load pledge details.'
@@ -60,35 +77,104 @@ const fetchPledgeDetails = async (id: string) => {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   fetchPledgeDetails(route.params.id as string)
 })
+
+const isPostAuthor = computed(() => {
+  return currentUserId.value && pledge.value?.post?.author_id === currentUserId.value
+})
+
+// --- Formatter for Pickup Preference ---
+const getPreferenceLabel = (pref: string) => {
+  if (pref === 'deliver') return 'I can deliver'
+  if (pref === 'pickup') return 'Pickup from my location'
+  if (pref === 'community') return 'Meet at community center'
+  return pref
+}
+
+// --- Map Toggle ---
+function toggleMapExpand() {
+  isMapExpanded.value = !isMapExpanded.value
+  setTimeout(() => {
+    if (mapInstance) mapInstance.invalidateSize()
+  }, 250)
+}
+
+// --- Modal Request Handler ---
+const requestStatusUpdate = (action: 'confirmed' | 'completed' | 'cancelled') => {
+  if (action === 'confirmed') {
+    confirmDialog.value = {
+      isOpen: true, action,
+      title: 'Confirm Donation',
+      message: 'Are you sure you want to accept and confirm this donation? You will need to coordinate with the donor for handover.',
+      confirmText: 'Yes, Confirm Donation',
+      btnClass: 'btn-confirm-accept'
+    }
+  } else if (action === 'cancelled') {
+    confirmDialog.value = {
+      isOpen: true, action,
+      title: 'Decline Donation',
+      message: 'Are you sure you want to decline these materials? This action will cancel the pledge and cannot be undone.',
+      confirmText: 'Yes, Decline',
+      btnClass: 'btn-confirm-reject'
+    }
+  } else if (action === 'completed') {
+    confirmDialog.value = {
+      isOpen: true, action,
+      title: 'Confirm Delivery',
+      message: 'Have you successfully received the materials? Confirming this will officially close this pledge.',
+      confirmText: 'Yes, Items Received',
+      btnClass: 'btn-confirm-complete'
+    }
+  }
+}
+
+// --- Execute DB Update ---
+const executeStatusUpdate = async () => {
+  if (!pledge.value) return
+
+  const newStatus = confirmDialog.value.action
+  isUpdating.value = true
+  confirmDialog.value.isOpen = false
+
+  try {
+    const { error } = await supabase
+      .from('pledges')
+      .update({ status: newStatus })
+      .eq('id', pledge.value.id)
+
+    if (error) throw error
+
+    pledge.value.status = newStatus
+  } catch (err: any) {
+    console.error('Failed to update status:', err.message)
+    alert('Failed to update pledge status. Check database enum values.')
+  } finally {
+    isUpdating.value = false
+  }
+}
 
 function initMap(lat: number, lng: number) {
   if (!mapContainer.value) return
 
-  // 1. Destroy existing map instance if navigating between pledges
   if (mapInstance) {
     mapInstance.remove()
     mapInstance = null
   }
 
-  // 2. Initialize new map
   mapInstance = L.map(mapContainer.value).setView([lat, lng], 15)
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
+    attribution: '&copy; OpenStreetMap',
     maxZoom: 19
   }).addTo(mapInstance)
 
   L.marker([lat, lng]).addTo(mapInstance)
 
-  // 3. Force Leaflet to recalculate the grid size after Vue finishes painting the DOM
   setTimeout(() => {
-    if (mapInstance) {
-      mapInstance.invalidateSize()
-    }
-  }, 100)
+    if (mapInstance) mapInstance.invalidateSize()
+  }, 250)
 }
 
 function goBack() {
@@ -101,17 +187,14 @@ const formatDate = (dateString: string) => {
   })
 }
 
-// 4. THE FIX: Watch the route parameter for changes
 watch(
   () => route.params.id,
   (newId) => {
-    // Only fetch if we are still on the pledge detail page and have a new ID
     if (newId && route.name === 'pledgedetail') {
       fetchPledgeDetails(newId as string)
     }
   }
 )
-
 </script>
 
 <template>
@@ -124,7 +207,6 @@ watch(
     </div>
 
     <div v-else-if="pledge" class="pledge-container">
-      <!-- Header -->
       <BackButton />
 
       <div class="page-header">
@@ -138,17 +220,14 @@ watch(
       </div>
 
       <div class="content-grid">
-        <!-- Main Content -->
         <div class="main-column">
-          <!-- Donor Info -->
           <div class="card">
             <h3>Donor Information</h3>
             <p><strong>Name:</strong> {{ pledge.donor?.full_name || 'Anonymous' }}</p>
-            <p v-if="pledge.donor?.email"><strong>Email:</strong> {{ pledge.donor.email }}</p>
+            <p v-if="pledge.donor?.email"><strong>Email:</strong> <a :href="`mailto:${pledge.donor.email}`">{{ pledge.donor.email }}</a></p>
             <p v-if="pledge.description"><strong>Note:</strong> {{ pledge.description }}</p>
           </div>
 
-          <!-- Items Table -->
           <div class="card">
             <h3>Materials Offered</h3>
             <table class="items-table">
@@ -166,15 +245,24 @@ watch(
               </tbody>
             </table>
           </div>
+
+          <div v-if="pledge.images && pledge.images.length > 0" class="card">
+            <h3>Attached Photos</h3>
+            <div class="photo-gallery">
+              <div v-for="img in pledge.images" :key="img.image_url" class="photo-item">
+                <img :src="img.image_url" alt="Donation material photo" />
+              </div>
+            </div>
+          </div>
         </div>
 
-        <!-- Sidebar / Logistics -->
         <div class="sidebar-column">
           <div class="card logistics-card">
             <h3>Logistics</h3>
             <div class="logistics-detail">
               <span class="label">Preference:</span>
-              <span class="value preference-badge">{{ pledge.pickup_preference }}</span>
+              <!-- Use helper function to display friendly label -->
+              <span class="value preference-badge">{{ getPreferenceLabel(pledge.pickup_preference) }}</span>
             </div>
 
             <div v-if="pledge.location_address" class="logistics-detail">
@@ -182,13 +270,60 @@ watch(
               <p class="value">{{ pledge.location_address }}</p>
             </div>
 
-            <div v-if="pledge.latitude && pledge.longitude" class="map-wrapper">
+            <!-- Map Container with Expand/Shrink Button -->
+            <div v-if="pledge.latitude && pledge.longitude" class="map-wrapper" :class="{ 'is-expanded': isMapExpanded }">
               <div ref="mapContainer" class="static-map"></div>
+
+              <button type="button" class="expand-map-btn" @click.prevent="toggleMapExpand" title="Toggle Fullscreen">
+                <svg v-if="!isMapExpanded" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+                </svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/>
+                </svg>
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Action Buttons Moved to Bottom Right -->
+      <div v-if="isPostAuthor" class="bottom-actions-container">
+        <template v-if="pledge.status === 'pending'">
+          <button class="btn-action pill-reject" :disabled="isUpdating" @click="requestStatusUpdate('cancelled')">
+            Decline
+          </button>
+          <button class="btn-action pill-accept" :disabled="isUpdating" @click="requestStatusUpdate('confirmed')">
+            {{ isUpdating ? 'Saving...' : 'Confirm Donation' }}
+          </button>
+        </template>
+
+        <template v-if="pledge.status === 'confirmed'">
+          <button class="btn-action pill-complete" :disabled="isUpdating" @click="requestStatusUpdate('completed')">
+            Mark as Received
+          </button>
+        </template>
+      </div>
+
     </div>
+
+    <!-- Inline Confirmation Modal -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="confirmDialog.isOpen" class="modal-overlay" @click.self="confirmDialog.isOpen = false">
+          <div class="confirm-modal">
+            <h3>{{ confirmDialog.title }}</h3>
+            <p>{{ confirmDialog.message }}</p>
+            <div class="modal-actions">
+              <button class="btn-cancel" @click="confirmDialog.isOpen = false">Cancel</button>
+              <button :class="['btn-confirm', confirmDialog.btnClass]" @click="executeStatusUpdate">
+                {{ confirmDialog.confirmText }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -198,15 +333,15 @@ watch(
   margin: 0 auto;
   padding: 24px;
 }
-.back-btn {
-  background: none;
-  border: none;
-  color: #778732;
-  cursor: pointer;
-  font-weight: 600;
-  margin-bottom: 16px;
+.loading-state, .error-state {
+  text-align: center;
+  padding: 48px;
+  color: #666;
 }
 .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 24px;
   border-bottom: 1px solid #eaeaea;
   padding-bottom: 16px;
@@ -214,6 +349,7 @@ watch(
 .page-header h1 {
   margin: 8px 0;
   font-size: 1.8rem;
+  color: #1A1D1A;
 }
 .subtitle {
   color: #666;
@@ -228,14 +364,20 @@ watch(
   text-transform: uppercase;
 }
 .status-badge.pending { background: #fff3cd; color: #856404; }
-.status-badge.active { background: #d4edda; color: #155724; }
+.status-badge.confirmed { background: #d4edda; color: #155724; }
 .status-badge.completed { background: #cce5ff; color: #004085; }
+.status-badge.cancelled { background: #f8d7da; color: #721c24; }
 
 .content-grid {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 24px;
 }
+@media (max-width: 768px) {
+  .content-grid { grid-template-columns: 1fr; }
+  .page-header { flex-direction: column; gap: 16px; }
+}
+
 .card {
   background: #fff;
   border: 1px solid #eaeaea;
@@ -249,6 +391,7 @@ watch(
   margin-bottom: 16px;
   border-bottom: 1px solid #eaeaea;
   padding-bottom: 8px;
+  color: #1A1D1A;
 }
 
 .items-table {
@@ -263,6 +406,25 @@ watch(
 .items-table th {
   background: #f9f9f9;
   font-weight: 600;
+  color: #333;
+}
+
+.photo-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+.photo-item {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #eaeaea;
+}
+.photo-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .logistics-detail {
@@ -280,18 +442,152 @@ watch(
   padding: 4px 8px;
   border-radius: 4px;
   font-weight: 600;
-  text-transform: capitalize;
 }
 
+/* --- Map Enlarge Styles --- */
 .map-wrapper {
+  position: relative;
   margin-top: 16px;
   height: 200px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #eaeaea;
 }
+
+.expand-map-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  background: white;
+  border: 2px solid rgba(0,0,0,0.2);
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #374151;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+  transition: background 0.2s;
+}
+.expand-map-btn:hover { background: #f3f4f6; }
+
+.map-wrapper.is-expanded {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999999;
+  background: white;
+  margin: 0;
+  border-radius: 0;
+  border: none;
+}
+
+.map-wrapper.is-expanded .static-map {
+  height: 100vh;
+}
+
 .static-map {
   width: 100%;
   height: 100%;
+  min-height: 200px; /* Fixes white map issue */
+  z-index: 1; /* Keeps Leaflet behind modals */
 }
+
+/* --- BOTTOM RIGHT PILL ACTIONS --- */
+.bottom-actions-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-top: 16px;
+  padding-top: 24px;
+  border-top: 1px solid #eaeaea;
+}
+.btn-action {
+  border: none;
+  padding: 14px 28px;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 1rem;
+  font-family: 'Outfit', sans-serif;
+  cursor: pointer;
+  transition: transform 0.1s, opacity 0.2s, box-shadow 0.2s;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+}
+.btn-action:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 10px rgba(0,0,0,0.08);
+  opacity: 0.95;
+}
+.btn-action.pill-accept, .btn-action.pill-complete { background: #778732; color: white; }
+.btn-action.pill-reject { background: #fee2e2; color: #ef4444; }
+.btn-action:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+/* --- INLINE CONFIRM MODAL UI --- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.confirm-modal {
+  background: white;
+  width: 100%;
+  max-width: 420px;
+  padding: 28px;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+.confirm-modal h3 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #1A1D1A;
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.25rem;
+}
+.confirm-modal p {
+  color: #666;
+  margin-bottom: 28px;
+  line-height: 1.6;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+.btn-cancel {
+  background: #f3f4f6;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 50px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #374151;
+  transition: background 0.2s;
+}
+.btn-cancel:hover { background: #e5e7eb; }
+
+.btn-confirm {
+  border: none;
+  padding: 10px 20px;
+  border-radius: 50px;
+  font-weight: 600;
+  cursor: pointer;
+  color: white;
+  transition: opacity 0.2s;
+}
+.btn-confirm:hover { opacity: 0.9; }
+.btn-confirm-accept, .btn-confirm-complete { background: #778732; }
+.btn-confirm-reject { background: #ef4444; }
+
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
