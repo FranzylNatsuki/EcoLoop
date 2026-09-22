@@ -25,8 +25,8 @@ export interface Organizer {
 export interface RelatedEvent {
   id: number | string
   title: string
-  image: string
-  category: string
+  image?: string
+  category?: string
   fulfillment_percent?: number
 }
 
@@ -38,6 +38,7 @@ export interface EventItem {
   schedule: string
   location: string
   description: string
+  image?: string
   images?: string[]
   category?: string
 

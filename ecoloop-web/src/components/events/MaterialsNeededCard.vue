@@ -1,91 +1,86 @@
 <script setup lang="ts">
 import MaterialRow from './MaterialRow.vue'
 
-const materials = [
-  {
-    name: 'Reclaimed Wood Planks',
-    description: 'For the frame, benches, and shelving',
-    current: 87,
-    target: 120,
-    unit: 'planks',
-    image: 'https://placehold.co/80x80'
-  },
-  {
-    name: 'Glass Bottles',
-    description: 'For the bottle wall and decorative accents',
-    current: 210,
-    target: 500,
-    unit: 'bottles',
-    image: 'https://placehold.co/80x80'
-  },
-  {
-    name: 'Wooden Pallets',
-    description: 'For decking, planters, and base layers',
-    current: 32,
-    target: 40,
-    unit: 'pallets',
-    image: 'https://placehold.co/80x80'
-  },
-  {
-    name: 'Metal Pipes',
-    description: 'For structural supports and irrigation',
-    current: 18,
-    target: 30,
-    unit: 'pipes',
-    image: 'https://placehold.co/80x80'
-  },
-  {
-    name: 'Old Tires',
-    description: 'For planters and garden seating',
-    current: 9,
-    target: 12,
-    unit: 'tires',
-    image: 'https://placehold.co/80x80'
-  }
-]
+defineProps<{
+  materials?: Array<{
+    material?: string
+    name?: string
+    description?: string
+    current: number
+    target: number
+    unit: string
+    image?: string
+  }>
+}>()
 
-function donate(material: typeof materials[number]) {
-  console.log('Donate:', material.name)
+const emit = defineEmits<{
+  (e: 'open-donate'): void
+}>()
+
+function handleDonate(materialName: string) {
+  console.log('Donating to:', materialName)
+  emit('open-donate')
 }
 </script>
 
 <template>
   <section class="materials-card">
-
     <div class="section-heading">
       <h2>Materials Needed</h2>
-
       <p>
-        We're collecting materials for the pavilion structure, walls,
-        and details. Every donation helps us build faster.
+        We're collecting materials for this project. Every donation helps us build faster.
       </p>
     </div>
 
-    <div class="materials-grid">
-
+    <div class="materials-list" v-if="materials && materials.length > 0">
       <MaterialRow
-        v-for="material in materials"
-        :key="material.name"
-        :material="material"
-        @donate="donate(material)"
+        v-for="(item, index) in materials"
+        :key="index"
+        :material="{
+          name: item.material || item.name || 'Material',
+          description: item.description || '',
+          current: item.current || 0,
+          target: item.target || 1,
+          unit: item.unit || 'pcs',
+          image: item.image || 'https://placehold.co/80x80'
+        }"
+        @donate="handleDonate(item.material || item.name || '')"
       />
-
     </div>
-
+    <p v-else class="empty-text">No specific materials listed for this event.</p>
   </section>
 </template>
 
 <style scoped>
-.materials-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
+.materials-card {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 32px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.section-heading h2 {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 6px 0;
+}
+
+.section-heading p {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin-bottom: 24px;
+}
+
+.materials-list {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
-/* Fallback to single column on mobile screens */
-@media (max-width: 640px) {
-  .materials-grid {
-    grid-template-columns: 1fr;
-  }
+.empty-text {
+  font-size: 0.875rem;
+  color: #94a3b8;
 }
 </style>

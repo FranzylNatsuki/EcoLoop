@@ -43,10 +43,7 @@ const emit = defineEmits<{
 const dialogRef = ref<HTMLDialogElement | null>(null)
 
 // Materials list state
-const materials = ref<MaterialItem[]>([
-  { id: '1', name: 'Reclaimed Wooden Pallets', quantity: 15, unit: 'pcs' },
-  { id: '2', name: 'Glass Bottles (Cleaned)', quantity: 100, unit: 'pcs' }
-])
+const materials = ref<MaterialItem[]>([])
 
 const newItemName = ref('')
 const newItemQuantity = ref<number | string>('')
@@ -73,8 +70,8 @@ function addMaterial() {
   materials.value.push({
     id: Date.now().toString(),
     name: newItemName.value.trim(),
-    quantity: newItemQuantity.value || 1,
-    unit: newItemUnit.value || 'pcs'
+    quantity: Number(newItemQuantity.value) || 1,
+    unit: newItemUnit.value.trim() || 'pcs'
   })
 
   newItemName.value = ''

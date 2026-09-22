@@ -3,11 +3,6 @@ import { computed } from 'vue'
 import type { EventItem } from '../../types/event'
 import { useRouter } from 'vue-router'
 
-const router = useRouter()
-function goToEvent() {
-  router.push(`/events/${props.event.id}`)
-}
-
 const props = defineProps<{
   event: EventItem
 }>()
@@ -17,7 +12,13 @@ const emit = defineEmits<{
   (e: 'share', eventId: number | string): void
 }>()
 
-// Format raw ISO or date string to readable format
+const router = useRouter()
+function goToEvent() {
+  router.push(`/events/${props.event.id}`)
+}
+
+const defaultPlaceholder = 'https://placehold.co/600x360?text=No+Image+Available'
+
 const formattedSchedule = computed(() => {
   if (!props.event.schedule) return 'Date TBD'
   const date = new Date(props.event.schedule)
@@ -32,22 +33,20 @@ const formattedSchedule = computed(() => {
   }).format(date)
 })
 
-//function handleJoin() {
-//  emit('join', props.event.id)
-//}
-
 function handleShare() {
   emit('share', props.event.id)
+}
+
+function handleImageError(event: Event) {
+  const img = event.target as HTMLImageElement
+  img.src = defaultPlaceholder
 }
 </script>
 
 <template>
-    <article class="event-card" @click="goToEvent">
-
-    <!-- Top Header: Type Tag & Category -->
+  <article class="event-card" @click="goToEvent">
     <div class="card-header">
       <div class="badge-group">
-        <!-- Distinct Event Badge -->
         <span class="event-type-badge">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
@@ -74,12 +73,9 @@ function handleShare() {
       </button>
     </div>
 
-    <!-- Event Title -->
     <h3 class="event-title">{{ event.event_title }}</h3>
 
-    <!-- Key Metadata Strip (Date, Location, Goal) -->
     <div class="meta-details">
-      <!-- Schedule -->
       <div class="meta-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#778732" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10" />
@@ -88,7 +84,6 @@ function handleShare() {
         <span>{{ formattedSchedule }}</span>
       </div>
 
-      <!-- Location -->
       <div v-if="event.location" class="meta-item">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#778732" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
@@ -96,39 +91,23 @@ function handleShare() {
         </svg>
         <span class="truncate">{{ event.location }}</span>
       </div>
-
-      <!-- Participant Goal -->
-      <div v-if="event.participant_goal" class="meta-item">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#778732" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="9" cy="7" r="4" />
-          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-        <span>
-          <strong v-if="event.attendees_count !== undefined">{{ event.attendees_count }} / </strong>
-          {{ event.participant_goal }} Goal
-        </span>
-      </div>
     </div>
 
-    <!-- Description -->
     <p class="event-description">{{ event.description }}</p>
 
-    <!-- Image Gallery Preview (Optional) -->
-    <div v-if="event.images && event.images.length > 0" class="image-gallery">
-      <div
-        v-for="(img, idx) in event.images.slice(0, 3)"
-        :key="idx"
-        class="image-wrapper"
-      >
-        <img :src="img" :alt="`Event photo ${idx + 1}`" />
+    <!-- Main Banner Display -->
+    <div class="image-gallery">
+      <div class="image-wrapper">
+        <img
+          :src="event.image && event.image.trim() !== '' ? event.image : defaultPlaceholder"
+          :alt="event.event_title"
+          @error="handleImageError"
+        />
       </div>
     </div>
 
-    <!-- Footer Action -->
     <div class="card-footer">
-        <button type="button" class="join-btn" @click="goToEvent">
+      <button type="button" class="join-btn" @click="goToEvent">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
           <circle cx="8.5" cy="7" r="4" />
@@ -138,7 +117,6 @@ function handleShare() {
         <span> Join Event </span>
       </button>
     </div>
-
   </article>
 </template>
 
@@ -154,6 +132,7 @@ function handleShare() {
   gap: 16px;
   box-shadow: 0px 4px 16px rgba(26, 29, 26, 0.04);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
 }
 
 .event-card:hover {
@@ -161,7 +140,6 @@ function handleShare() {
   box-shadow: 0px 8px 24px rgba(26, 29, 26, 0.08);
 }
 
-/* Header & Badges */
 .card-header {
   display: flex;
   align-items: center;
@@ -174,7 +152,6 @@ function handleShare() {
   gap: 8px;
 }
 
-/* Distinct Event Badge */
 .event-type-badge {
   display: inline-flex;
   align-items: center;
@@ -216,7 +193,6 @@ function handleShare() {
   background: #e4e7e3;
 }
 
-/* Title & Content */
 .event-title {
   margin: 0;
   font-family: 'Outfit', sans-serif;
@@ -226,7 +202,6 @@ function handleShare() {
   line-height: 1.3;
 }
 
-/* Meta Details Grid */
 .meta-details {
   display: flex;
   flex-wrap: wrap;
@@ -261,17 +236,14 @@ function handleShare() {
   color: #4a524a;
 }
 
-/* Image Previews */
 .image-gallery {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
-  gap: 8px;
+  width: 100%;
   border-radius: 8px;
   overflow: hidden;
 }
 
 .image-wrapper {
-  height: 120px;
+  height: 200px;
   border-radius: 6px;
   overflow: hidden;
 }
@@ -282,7 +254,6 @@ function handleShare() {
   object-fit: cover;
 }
 
-/* Footer & Actions */
 .card-footer {
   display: flex;
   align-items: center;
@@ -310,19 +281,5 @@ function handleShare() {
 
 .join-btn:hover {
   background: #65732a;
-}
-
-.event-card {
-  width: 100%;
-  background: #ffffff;
-  border: 1px solid #e4e7e3;
-  border-radius: 16px;
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  box-shadow: 0px 4px 16px rgba(26, 29, 26, 0.04);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  cursor: pointer;
 }
 </style>

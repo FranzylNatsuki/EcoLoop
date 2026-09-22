@@ -6,37 +6,47 @@ import CreateCauseModal from './CreatePost.vue'
 import { usePosts, type CreatePostPayload } from '../../composables/usePosts'
 import { useEvents } from '../../composables/useEvents'
 
+// Composables
 const { addPost } = usePosts()
-const { addEvent } = useEvents()
+const { createEvent } = useEvents()
 
-function isEventPayload(payload: any): payload is { event: any; materials: any[] } {
-  return payload && typeof payload === 'object' && 'event' in payload && 'materials' in payload
+// Type Guard
+function isEventPayload(payload: unknown): payload is { event: any; materials: any[] } {
+  return (
+    typeof payload === 'object' &&
+    payload !== null &&
+    'event' in payload &&
+    'materials' in payload
+  )
 }
 
-// Controls visibility of THIS chooser modal
+// Two-way binding for modal open state
 const isOpen = defineModel<boolean>({ default: false })
 
-// FIX: Added selectCause and selectEvent to the allowed emits
+// Explicit Emits Declaration
 const emit = defineEmits<{
-  (e: 'publish', payload: any): void
+  (e: 'publish', payload: unknown): void
   (e: 'selectCause'): void
   (e: 'selectEvent'): void
 }>()
 
+// Template Refs & Child Modal Visibility States
 const dialogRef = ref<HTMLDialogElement | null>(null)
-
-// Child modal states for direct chain-loading
 const isEventModalOpen = ref(false)
 const isCauseModalOpen = ref(false)
 
-// Native dialog visibility sync
-watch(isOpen, (open) => {
-  if (open) {
-    dialogRef.value?.showModal()
-  } else {
-    dialogRef.value?.close()
-  }
-}, { immediate: true })
+// Dialog Visibility Synchronizer
+watch(
+  isOpen,
+  (open) => {
+    if (open) {
+      dialogRef.value?.showModal()
+    } else {
+      dialogRef.value?.close()
+    }
+  },
+  { immediate: true }
+)
 
 function handleBackdropClick(e: MouseEvent) {
   if (e.target === dialogRef.value) {
@@ -47,33 +57,45 @@ function handleBackdropClick(e: MouseEvent) {
 function handleSelectCause() {
   isOpen.value = false
   isCauseModalOpen.value = true
-  emit('selectCause') // Let the parent component know!
+  emit('selectCause')
 }
 
 function handleSelectEvent() {
   isOpen.value = false
   isEventModalOpen.value = true
-  emit('selectEvent') // Let the parent component know!
+  emit('selectEvent')
 }
 
-async function handlePublish(payload: any) {
-  console.log('1. Payload received from form:', payload)
-
+async function handlePublish(payload: unknown) {
   if (isEventPayload(payload)) {
-    console.log('2a. Saving Event to database...')
-    await addEvent(payload)
+    const formattedMaterials = (payload.materials || []).map((m) => ({
+      material: m.name || m.material || 'Material',
+      target: Number(m.target || m.quantity || 1),
+      current: Number(m.current || 0),
+      unit: m.unit || 'pcs'
+    }))
+
+    const result = await createEvent({
+      title: payload.event.title,
+      description: payload.event.description,
+      category: payload.event.category,
+      location: payload.event.location,
+      event_date: payload.event.date,
+      banner_url: payload.event.bannerImage,
+      materials_needed: formattedMaterials
+    })
+
+    if (!result.success) {
+      alert('Failed to post event: ' + result.error)
+      return
+    }
   } else {
-    console.log('2b. Saving Post to database...')
     await addPost(payload as CreatePostPayload)
   }
 
-  console.log('3. Database write complete. Closing modals.')
-
-  // Close the child modal
   isCauseModalOpen.value = false
   isEventModalOpen.value = false
 
-  // Tell the parent (CreatePostButton) to close the main backdrop
   emit('publish', payload)
 }
 </script>
@@ -154,7 +176,6 @@ async function handlePublish(payload: any) {
 </template>
 
 <style scoped>
-/* Reset and Dialog Backdrop */
 .modal-backdrop {
   border: none;
   padding: 0;
@@ -167,7 +188,6 @@ async function handlePublish(payload: any) {
   background: rgba(0, 0, 0, 0.4);
 }
 
-/* Modal Box Container */
 .chooser-card {
   width: 540px;
   padding: 28px;
@@ -180,7 +200,6 @@ async function handlePublish(payload: any) {
   box-sizing: border-box;
 }
 
-/* Header */
 .header-row {
   width: 100%;
   display: flex;
@@ -240,7 +259,6 @@ async function handlePublish(payload: any) {
   background-color: #E4E7E3;
 }
 
-/* Selection Cards Stack */
 .options-stack {
   width: 100%;
   display: flex;
@@ -307,7 +325,6 @@ async function handlePublish(payload: any) {
   flex-shrink: 0;
 }
 
-/* Footer Cancel */
 .btn-cancel {
   width: 100%;
   background: transparent;

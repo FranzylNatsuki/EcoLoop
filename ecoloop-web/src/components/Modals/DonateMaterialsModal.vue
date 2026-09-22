@@ -5,7 +5,6 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
 // --- Vite Leaflet Icon Fix ---
-// Vite sometimes breaks default leaflet marker paths. This fixes it automatically.
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerShadow from 'leaflet/dist/images/marker-shadow.png'
@@ -23,9 +22,15 @@ interface PledgeItemDraft {
   unit: string
 }
 
-const props = defineProps<{
-  postId: string
-}>()
+const props = withDefaults(
+  defineProps<{
+    postId: string | number
+    targetType?: 'cause' | 'event'
+  }>(),
+  {
+    targetType: 'cause'
+  }
+)
 
 const isOpen = defineModel<boolean>({ default: false })
 const emit = defineEmits<{
@@ -70,7 +75,7 @@ function toggleMapExpand() {
     if (mapInstance) {
       mapInstance.invalidateSize()
     }
-  }, 100) // slight delay allows the CSS resize to finish first
+  }, 100)
 }
 
 function handleBackdropClick(e: MouseEvent) {
@@ -80,16 +85,15 @@ function handleBackdropClick(e: MouseEvent) {
 }
 
 // Initialize Leaflet Map
-// Initialize Leaflet Map
 function initMap() {
   if (!mapContainer.value || mapInstance) return
 
-  // 1. Set your default coordinates here (Example: Talisay, Cebu)
+  // Default coordinates (Talisay, Cebu)
   const defaultLat = 9.3068
-    const defaultLng = 123.3054
+  const defaultLng = 123.3054
 
-    // Set zoom level to 13 (good for viewing the city level)
-    mapInstance = L.map(mapContainer.value).setView([defaultLat, defaultLng], 13)
+  // Set zoom level to 13
+  mapInstance = L.map(mapContainer.value).setView([defaultLat, defaultLng], 13)
 
   // Load OpenStreetMap tiles
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -115,7 +119,7 @@ function initMap() {
 const title = ref('')
 const description = ref('')
 const pickupPreference = ref<'deliver' | 'pickup' | 'community'>('deliver')
-const locationAddress = ref('') // Text address
+const locationAddress = ref('')
 
 const items = ref<PledgeItemDraft[]>([
   { material_name: '', quantity: 1, unit: 'units' }
@@ -145,10 +149,10 @@ async function handleSubmit() {
   errorMessage.value = null
 
   if (!props.postId || props.postId === 'undefined') {
-      errorMessage.value = 'Error: Invalid Post ID. Are you using mock data?'
-      console.error('Invalid postId:', props.postId)
-      return
-    }
+    errorMessage.value = 'Error: Invalid Post ID.'
+    console.error('Invalid postId:', props.postId)
+    return
+  }
 
   const validItems = items.value.filter((i) => i.material_name.trim() !== '')
   if (validItems.length === 0) {
@@ -164,24 +168,33 @@ async function handleSubmit() {
   try {
     isSubmitting.value = true
 
+    // 1. Auth check
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError || !session) {
       errorMessage.value = 'You must be logged in to submit a donation.'
       return
     }
 
-    // 2. Insert master pledge WITH Coordinates!
+    // 2. Select dynamic DB tables and FK names based on targetType
+    const isEvent = String(props.targetType || '').toLowerCase() === 'event'
+
+    const parentTable = isEvent ? 'event_pledges' : 'pledges'
+    const parentIdField = isEvent ? 'event_id' : 'post_id'
+    const itemsTable = isEvent ? 'event_pledge_items' : 'pledge_items'
+    const itemsFkField = isEvent ? 'event_pledge_id' : 'pledge_id'
+
+    // Payload construction
     const { data: pledge, error: pledgeError } = await supabase
-      .from('pledges')
+      .from(parentTable)
       .insert({
-        post_id: props.postId,
+        [parentIdField]: String(props.postId),
         donor_id: session.user.id,
-        title: title.value,
-        description: description.value,
+        title: title.value.trim(),
+        description: description.value.trim(),
         pickup_preference: pickupPreference.value,
-        location_address: locationAddress.value,
-        latitude: latitude.value,    // Added
-        longitude: longitude.value,  // Added
+        location_address: locationAddress.value.trim() || null,
+        latitude: latitude.value,
+        longitude: longitude.value,
         status: 'pending'
       })
       .select('id')
@@ -191,16 +204,16 @@ async function handleSubmit() {
       throw new Error(pledgeError?.message || 'Failed to initialize pledge.')
     }
 
-    // 3. Insert line items
+    // 4. Insert Line Items
     const payloadItems = validItems.map((item) => ({
-      pledge_id: pledge.id,
+      [itemsFkField]: pledge.id,
       material_name: item.material_name.trim(),
       quantity: item.quantity,
       unit: item.unit.trim() || 'units'
     }))
 
     const { error: itemsError } = await supabase
-      .from('pledge_items')
+      .from(itemsTable)
       .insert(payloadItems)
 
     if (itemsError) throw new Error(itemsError.message)
@@ -227,6 +240,7 @@ async function handleSubmit() {
   }
 }
 </script>
+
 <template>
   <Teleport to="body">
     <dialog
@@ -321,8 +335,6 @@ async function handleSubmit() {
 
           <!-- Right Column: Logistics & Location -->
           <div class="form-column">
-
-            <!-- Map & Location Section (Duplicates Removed!) -->
             <div class="form-group map-group">
               <div class="section-label-row">
                 <label class="form-label">Drop-off / Pickup Location</label>
@@ -332,24 +344,20 @@ async function handleSubmit() {
 
               <!-- Leaflet Map Container -->
               <div class="map-wrapper" :class="{ 'is-expanded': isMapExpanded }">
-                              <!-- Leaflet Map Container -->
-                              <div ref="mapContainer" class="map-preview"></div>
+                <div ref="mapContainer" class="map-preview"></div>
 
-                              <!-- Floating Enlarge/Shrink Button -->
-                              <button type="button" class="expand-map-btn" @click.prevent="toggleMapExpand" title="Toggle Fullscreen">
-                                <!-- Expand Icon -->
-                                <svg v-if="!isMapExpanded" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                  <path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
-                                </svg>
-                                <!-- Shrink Icon -->
-                                <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                  <path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/>
-                                </svg>
-                              </button>
-                            </div>
+                <!-- Floating Enlarge/Shrink Button -->
+                <button type="button" class="expand-map-btn" @click.prevent="toggleMapExpand" title="Toggle Fullscreen">
+                  <svg v-if="!isMapExpanded" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+                  </svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/>
+                  </svg>
+                </button>
+              </div>
 
               <div class="location-address">
-                <!-- Fixed SVG Icon -->
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#778732" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
                   <circle cx="12" cy="10" r="3"/>
@@ -458,7 +466,7 @@ async function handleSubmit() {
 
 .divider {
   height: 1px;
-  background: #e5e7eb;
+  background: #e5e5e5;
 }
 
 .error-banner {
@@ -512,19 +520,6 @@ async function handleSubmit() {
 
 .add-row-btn:hover {
   background: #f0f4ea;
-}
-
-.text-btn {
-  background: none;
-  border: none;
-  color: #778732;
-  font-weight: 500;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.text-btn:hover {
-  text-decoration: underline;
 }
 
 .items-scroll-list {
@@ -630,17 +625,10 @@ async function handleSubmit() {
 
 .map-preview {
   width: 100%;
-  height: 200px; /* Increased from 120px */
+  height: 200px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
-}
-
-.map-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 
 .location-address {
@@ -793,7 +781,7 @@ async function handleSubmit() {
   position: absolute;
   top: 10px;
   right: 10px;
-  z-index: 1000; /* Must be 1000 to sit above Leaflet tiles */
+  z-index: 1000;
   background: white;
   border: 2px solid rgba(0,0,0,0.2);
   border-radius: 4px;
@@ -812,14 +800,13 @@ async function handleSubmit() {
   background: #f3f4f6;
 }
 
-/* Fullscreen state overrides */
 .map-wrapper.is-expanded {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  z-index: 999999; /* Sit on top of the modal backdrop */
+  z-index: 999999;
   background: white;
 }
 
@@ -828,5 +815,4 @@ async function handleSubmit() {
   border-radius: 0;
   border: none;
 }
-
 </style>
