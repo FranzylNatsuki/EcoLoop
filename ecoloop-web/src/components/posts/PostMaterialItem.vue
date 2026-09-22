@@ -42,7 +42,11 @@ const percentage = computed(() => {
       <button v-else class="donate-button fulfilled-button" disabled>Fulfilled</button>
     </div>
 
-    <DonateMaterialsModal v-if="!material.isFulfilled" v-model="showDonateModal" />
+    <DonateMaterialsModal
+      v-if="!material.isFulfilled"
+      v-model="showDonateModal"
+      :post-id="material.id"
+    />
   </div>
 </template>
 

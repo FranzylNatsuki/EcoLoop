@@ -2,7 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../composables/useAuth'
 import PostCard from '../components/posts/PostCard.vue'
-import DonationHistoryCard from '../components/sidebar/DonationHistoryCard.vue'
 import SavedProjectsCard from '../components/sidebar/SavedProjectsCard.vue'
 import EditProfileModal from '../components/Modals/EditProfileModal.vue'
 import { usePosts } from '../composables/usePosts'
