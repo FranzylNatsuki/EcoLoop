@@ -47,6 +47,11 @@ const router = createRouter({
       meta: { hideHeader: false },
     },
     {
+      path: '/marketplace/:id',
+      name: 'MarketDetail',
+      component: () => import('../views/MarketDetailView.vue')
+    },
+    {
       path: '/register',
       name: 'register',
       component: Registration,

@@ -1,10 +1,16 @@
 <script setup lang="ts">
-// Import the shared interface instead of declaring a local one
+import { useRouter } from 'vue-router'
 import type { Listing } from '../../types/marketplace'
 
-defineProps<{
+const props = defineProps<{
   listing: Listing
 }>()
+
+const router = useRouter()
+
+function openListing() {
+  router.push({ name: 'MarketDetail', params: { id: props.listing.id } })
+}
 
 const getConditionStyle = (condition: string) => {
   switch (condition) {
@@ -21,7 +27,7 @@ const getConditionStyle = (condition: string) => {
 </script>
 
 <template>
-  <div class="listing-card">
+  <div class="listing-card" role="link" tabindex="0" @click="openListing" @keydown.enter="openListing">
     <div class="image-container">
       <img :src="listing.image" :alt="listing.title" class="product-photo" />
       <div
@@ -39,7 +45,7 @@ const getConditionStyle = (condition: string) => {
 
     <div class="card-body">
       <div class="title-price-row">
-        <h3 class="item-title">{{ listing.title }}</h3>
+        <h3 class="item-title" @click.stop="openListing">{{ listing.title }}</h3>
       </div>
       <div class="pricing-row">
         <span class="item-price" :class="{ 'text-accent': listing.price === 'Free' || listing.price === 'Trade' }">

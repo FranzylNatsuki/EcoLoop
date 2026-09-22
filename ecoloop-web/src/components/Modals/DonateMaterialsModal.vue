@@ -109,6 +109,10 @@ async function fetchPostLocation() {
       .eq('id', props.postId)
       .single()
 
+    if (error) {
+        console.error("Supabase query error fetching location:", error.message)
+    }
+
     if (data) {
       postLat.value = data.latitude
       postLng.value = data.longitude

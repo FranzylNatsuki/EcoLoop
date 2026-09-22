@@ -94,10 +94,16 @@ const handleLogout = async () => {
   router.push('/login')
 }
 
-// Close dropdown when clicking outside
+// Close dropdowns when clicking outside
 const handleClickOutside = (event: MouseEvent) => {
-  if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
+  const target = event.target as Node
+
+  if (dropdownRef.value && !dropdownRef.value.contains(target)) {
     isDropdownOpen.value = false
+  }
+
+  if (notifDropdownRef.value && !notifDropdownRef.value.contains(target)) {
+    isNotifOpen.value = false
   }
 }
 

@@ -3,36 +3,60 @@ import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import PageLayout from '../components/layout/PageLayout.vue'
 import CategoryBar from '../components/layout/CategoryBar.vue'
-// import CreatePostBar from '../components/posts/CreatePostBar.vue'
 import PostCard from '../components/posts/PostCard.vue'
 import EventCard from '../components/posts/EventCard.vue'
+import MarketCard from '../components/posts/MarketCard.vue'
 import CommunityRules from '../components/sidebar/CommunityRules.vue'
 import TrendingTopics from '../components/sidebar/TrendingTopics.vue'
 import EventPreview from '../components/sidebar/EventPreview.vue'
 import { usePosts } from '../composables/usePosts'
 import { useEvents } from '../composables/useEvents'
+import { useMarketplace } from '../composables/useMarketplace'
 
 const router = useRouter()
-const { posts } = usePosts()
+const { posts, fetchPosts } = usePosts()
 const { events, fetchEvents } = useEvents()
+const { listings, fetchListings } = useMarketplace()
 
-onMounted(() => {
-  fetchEvents()
+const combinedFeed = computed(() => {
+  const normalizedPosts = (posts.value || []).map(p => ({
+    type: 'post' as const,
+    created_at: p.created_at,
+    item: p
+  }))
+
+  const normalizedEvents = (events.value || []).map(e => ({
+    type: 'event' as const,
+    created_at: e.schedule || (e as any).created_at || new Date().toISOString(),
+    item: e
+  }))
+
+  const normalizedListings = (listings.value || []).map(l => ({
+    type: 'marketplace' as const,
+    created_at: l.created_at,
+    item: l
+  }))
+
+  return [...normalizedPosts, ...normalizedEvents, ...normalizedListings].sort((a, b) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  )
 })
 
-const feed = computed(() => [
-  ...posts.value.map((p) => ({ kind: 'post' as const, item: p })),
-  ...events.value.map((e) => ({ kind: 'event' as const, item: e })),
-])
-
-// Maximum 5 events in the sidebar preview
 const sidebarEvents = computed(() => events.value.slice(0, 5))
 
 function openEvent(id: string | number) {
   router.push(`/events/${id}`)
 }
 
-const currentUserAvatar = 'https://placehold.co/38x38'
+function openMarketplaceItem(id: string | number) {
+  router.push({ name: 'MarketDetail', params: { id } })
+}
+
+onMounted(() => {
+  fetchPosts()
+  fetchEvents()
+  fetchListings()
+})
 </script>
 
 <template>
@@ -40,14 +64,18 @@ const currentUserAvatar = 'https://placehold.co/38x38'
     <CategoryBar />
     <PageLayout>
       <template #main>
-        <!-- <CreatePostBar :avatar="currentUserAvatar" /> -->
-        <template v-for="entry in feed" :key="`${entry.kind}-${entry.item.id}`">
+        <template v-for="entry in combinedFeed" :key="`${entry.type}-${entry.item.id}`">
           <EventCard
-            v-if="entry.kind === 'event'"
-            :event="entry.item"
+            v-if="entry.type === 'event'"
+            :event="(entry.item as any)"
             @click="openEvent(entry.item.id)"
           />
-          <PostCard v-else :post="entry.item" />
+          <MarketCard
+            v-else-if="entry.type === 'marketplace'"
+            :post="(entry.item as any)"
+            @click="openMarketplaceItem(entry.item.id)"
+          />
+          <PostCard v-else :post="(entry.item as any)" />
         </template>
       </template>
 
@@ -69,6 +97,14 @@ const currentUserAvatar = 'https://placehold.co/38x38'
             @click="openEvent(eventItem.id)"
           />
         </div>
+        <EventPreview
+          v-else
+          image="https://placehold.co/247x120"
+          date="Sat, Oct 12"
+          title="Community Clean-Up Day"
+          description="Join us for a neighborhood clean-up and learn how to sort materials for local recycling centers."
+          location="Riverfront Park • 10:00 AM"
+        />
       </template>
     </PageLayout>
   </div>
