@@ -8,39 +8,70 @@ import NotificationDropdown from './NotificationDropdown.vue'
 
 const isNotifOpen = ref(false)
 const notifDropdownRef = ref<HTMLElement | null>(null)
-
+const hasUnread = ref(false)
 const router = useRouter()
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 
 const userAvatar = ref<string | null>(null) // Add this state
 
+
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
 
-  // 1. Grab the current session
   const { data: { session } } = await supabase.auth.getSession()
 
   if (session) {
-    // 2. Fetch just the Avatar column for this user
-    const { data, error } = await supabase
+    const userId = session.user.id
+
+    // 1. Existing Avatar Fetch
+    const { data: avatarData, error: avatarError } = await supabase
       .from('profile_data')
       .select('Avatar')
-      .eq('id', session.user.id)
+      .eq('id', userId)
       .single()
 
-    if (!error && data?.Avatar) {
-      userAvatar.value = data.Avatar // 3. Save it to the ref
+    if (!avatarError && avatarData?.Avatar) {
+      userAvatar.value = avatarData.Avatar
+    }
+
+    // 2. NEW: Check for unread notifications
+    const lastViewed = localStorage.getItem(`last_notif_viewed_${userId}`)
+
+    // We only want a count, not the data, to keep the header lightweight
+    let query = supabase
+      .from('pledges')
+      .select('id, post:cause_requests!inner(author_id)', { count: 'exact', head: true })
+      .eq('cause_requests.author_id', userId)
+
+    // If they have checked before, only look for pledges created AFTER that time
+    if (lastViewed) {
+      query = query.gt('created_at', lastViewed)
+    }
+
+    const { count, error } = await query
+    if (!error && count && count > 0) {
+      hasUnread.value = true
     }
   }
 })
 
-
-const toggleNotifDropdown = () => {
+// Update your toggleNotifDropdown function to clear the badge!
+const toggleNotifDropdown = async () => {
   isNotifOpen.value = !isNotifOpen.value
   isDropdownOpen.value = false // Close profile menu if open
-}
 
+  if (isNotifOpen.value) {
+    // Hide the red dot
+    hasUnread.value = false
+
+    // Save the exact moment they opened it to localStorage
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      localStorage.setItem(`last_notif_viewed_${session.user.id}`, new Date().toISOString())
+    }
+  }
+}
 // Toggle profile menu
 const toggleDropdown = () => {
   isDropdownOpen.value = !isDropdownOpen.value
@@ -105,15 +136,18 @@ onUnmounted(() => {
 
         <!-- Notification Button -->
         <!-- Update the Notification Button in your template -->
-        <div class="profile-menu-container" ref="notifDropdownRef">
-          <button class="icon-btn" @click="toggleNotifDropdown">
-            <BellRing :size="18" />
-          </button>
+        <!-- Notification Button -->
+                <div class="profile-menu-container" ref="notifDropdownRef">
+                  <button class="icon-btn notif-btn" @click="toggleNotifDropdown">
+                    <BellRing :size="18" />
+                    <!-- The Red Dot -->
+                    <span v-if="hasUnread" class="unread-badge"></span>
+                  </button>
 
-          <transition name="dropdown-fade">
-            <NotificationDropdown v-if="isNotifOpen" />
-          </transition>
-        </div>
+                  <transition name="dropdown-fade">
+                    <NotificationDropdown v-if="isNotifOpen" />
+                  </transition>
+                </div>
         <!-- Profile Menu Wrapper -->
         <div class="profile-menu-container" ref="dropdownRef">
             <button class="profile" @click="toggleDropdown" :aria-expanded="isDropdownOpen">
@@ -325,4 +359,18 @@ onUnmounted(() => {
   display: inline-block;
 }
 
+.notif-btn {
+  position: relative;
+}
+
+.unread-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  background-color: #ef4444; /* Alert red */
+  border-radius: 50%;
+  border: 2px solid #ffffff; /* Creates a cutout effect against the background */
+}
 </style>
