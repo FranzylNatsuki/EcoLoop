@@ -3,29 +3,6 @@ import { computed } from 'vue'
 import PostActions from './PostActions.vue'
 import VotePanel from './VotePanel.vue'
 
-// Updated to match Supabase profile data
-interface Author {
-  full_name: string
-  Avatar: any // Changed to 'any' to handle the JSON object
-}
-
-// Added interface for the images array
-interface PostImage {
-  image_url: string
-}
-
-// Updated to match your cause_requests table schema
-interface Post {
-  id: string | number
-  title: string
-  body: string
-  vote_count: number
-  comment_count: number
-  category: string
-  created_at: string
-  author: Author
-  author_id: string
-}
 
 const props = defineProps<{
   post: any

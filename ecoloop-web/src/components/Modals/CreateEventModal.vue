@@ -67,20 +67,34 @@ function triggerFileInput() {
   fileInputRef.value?.click()
 }
 
+const selectedFile = ref<File | null>(null)
+
 function handleFileUpload(event: Event) {
   const input = event.target as HTMLInputElement
   if (input.files && input.files[0]) {
     const file = input.files[0]
+
+    // 2. Save the RAW file object to upload later
+    selectedFile.value = file
+
+    // Keep the blob ONLY for the UI preview in this modal
     formData.value.bannerImage = URL.createObjectURL(file)
   }
 }
 
 function removeBanner() {
   formData.value.bannerImage = ''
+  // 3. Clear the raw file if they remove the image
+  selectedFile.value = null
 }
 
 function handleSubmit() {
-  draftEventData.value = { ...formData.value }
+  // 4. Attach the rawFile to the draft data so it gets passed to the next modal
+  draftEventData.value = {
+    ...formData.value,
+    rawFile: selectedFile.value
+  }
+
   isOpen.value = false
   isMaterialsModalOpen.value = true
 }

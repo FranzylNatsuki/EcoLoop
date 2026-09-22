@@ -5,6 +5,7 @@ import CreateEventModal from './CreateEventModal.vue'
 import CreateCauseModal from './CreatePost.vue'
 import { usePosts, type CreatePostPayload } from '../../composables/usePosts'
 import { useEvents } from '../../composables/useEvents'
+import { supabase } from '../../composables/useAuth' // (or wherever you initialized your client)
 
 // Composables
 const { addPost } = usePosts()
@@ -68,6 +69,31 @@ function handleSelectEvent() {
 
 async function handlePublish(payload: unknown) {
   if (isEventPayload(payload)) {
+    let finalBannerUrl = ''
+
+    // 1. Intercept and upload the raw file to Supabase Storage
+    if (payload.event.rawFile) {
+      const file = payload.event.rawFile
+      const filePath = `event-banners/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}` // Clean filename
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('images') // Ensure this matches your actual bucket name!
+        .upload(filePath, file)
+
+      if (uploadError) {
+        alert('Failed to upload image: ' + uploadError.message)
+        return
+      }
+
+      // 2. Retrieve the permanent public URL
+      const { data: publicUrlData } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath)
+
+      finalBannerUrl = publicUrlData.publicUrl
+    }
+
+    // 3. Format materials
     const formattedMaterials = (payload.materials || []).map((m) => ({
       material: m.name || m.material || 'Material',
       target: Number(m.target || m.quantity || 1),
@@ -75,13 +101,14 @@ async function handlePublish(payload: unknown) {
       unit: m.unit || 'pcs'
     }))
 
+    // 4. Save to Database using the permanent URL
     const result = await createEvent({
       title: payload.event.title,
       description: payload.event.description,
       category: payload.event.category,
       location: payload.event.location,
-      event_date: payload.event.date,
-      banner_url: payload.event.bannerImage,
+      event_date: `${payload.event.date}T${payload.event.startTime || '00:00'}:00`, // Combined date/time safely
+      banner_url: finalBannerUrl, // <-- Using the real URL here!
       materials_needed: formattedMaterials
     })
 
@@ -90,6 +117,7 @@ async function handlePublish(payload: unknown) {
       return
     }
   } else {
+    // Handling standard posts...
     await addPost(payload as CreatePostPayload)
   }
 

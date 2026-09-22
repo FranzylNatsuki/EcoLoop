@@ -13,6 +13,12 @@ Codebase for EcoLoop website for CCS-6. Full techstack specifications:
 Deployed Site:
 `ecoloop.runasp.net`
 
+Leftover To Do:
+* Google Auth
+* Location API For Profile Data
+* UI stuff adjustments.
+* Recommendation System
+
 ### Figma
 *Based on*:
 https://www.figma.com/design/PKSdF5zZNxwBqm1AotJfBJ/EcoLoo?node-id=1-1255&t=J2YowMGp3bxCLtYy-1 
@@ -68,13 +74,19 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * PageLayout.vue - defined layout preset vue file
 * SeeEventsButton.vue  
 * CreatePostButton.vue
+* NotificationDropdown.vue
+* NotificationItem.vue
+* ProfileLayout.vue
 
 `src/components/navigation` *navigation presets*
 * SidebarNavigation.vue
 
 `src/components/posts` *homepage posts components*
 * CreatePostBar.vue - + Create Post Button
+* DonationCard.vue
+* MarketCard.vue
 * PostActions.vue - comments, donate, etc.
+* PostActionsMarket.vue
 * PostCard.vue - Post component
 * EventCard.vue - Event component card
 * VotePanel.vue - reddit votes ahh
@@ -117,13 +129,18 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * RequestMaterialsModal.vue
 * ThankYouDonationModal.vue
 * EditProfileModal.vue
+* EditPostModal.vue
+* MarketplaceInquiryModal.vue
+* CreateMarketplaceModal.vue
 
 `src/views` *individual pages*
 * HomeView.vue - home page component
 * EventsView.vue - events page component
 * MarketplaceView.vue - marketplace page
 * PostDetailView.vue - enlarged posts once clicked
+* PledgeDetailView.vue
 * ProfileView.vue
+* PublicProfile.vue
 * Login.vue
 * Registration.vue
 

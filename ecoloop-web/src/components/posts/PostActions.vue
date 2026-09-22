@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { MessageCircle, Share2, Bookmark } from 'lucide-vue-next'
 import DonateMaterialsModal from '../Modals/DonateMaterialsModal.vue'
 import EditPostModal from '../Modals/EditPostModal.vue'
+import ThankYouDonationModal from '../Modals/ThankYouDonationModal.vue'
+import { supabase } from '../../composables/useAuth'
 
 function handlePostUpdated() {
   window.location.reload() // Quickest way to see changes!
@@ -68,6 +70,49 @@ function handleBackToPost() {
     router.push(`/post/${props.postId}`)
   }
 }
+
+// Add refs to hold the fetched data
+const fetchedProjectName = ref(props.projectName || '')
+const fetchedAuthorName = ref(props.authorUsername || '')
+
+onMounted(async () => {
+  // If we already have them from props, skip the query
+  if (fetchedProjectName.value && fetchedAuthorName.value) return
+  if (!props.postId) return
+
+  // 1. Removed the complex alias, just requesting 'profiles'
+  const { data, error } = await supabase
+    .from('cause_requests')
+    .select(`
+      title,
+      profiles (
+        full_name
+      )
+    `)
+    .eq('id', props.postId)
+    .single()
+
+  if (!error && data) {
+    // 2. Cast data as 'any' to bypass TypeScript's strict type checking
+    const postData = data as any
+
+    fetchedProjectName.value = postData.title
+
+    // 3. Profiles comes back as an object (or array depending on PostgREST version),
+    // so we safely check for full_name
+    let authorName = 'Unknown User'
+    if (postData.profiles) {
+      // If it returned an array for some reason, grab the first item, otherwise grab the object
+      const profileInfo = Array.isArray(postData.profiles) ? postData.profiles[0] : postData.profiles
+      authorName = profileInfo?.full_name || 'Unknown User'
+    }
+
+    fetchedAuthorName.value = authorName
+  } else if (error) {
+    console.error('Error fetching author details:', error.message)
+  }
+})
+
 </script>
 
 <template>

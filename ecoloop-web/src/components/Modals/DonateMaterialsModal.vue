@@ -41,68 +41,161 @@ const dialogRef = ref<HTMLDialogElement | null>(null)
 const isSubmitting = ref(false)
 const errorMessage = ref<string | null>(null)
 
-// --- Map State ---
+// --- Map & Location State ---
 const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: L.Map | null = null
 let markerInstance: L.Marker | null = null
+const isMapExpanded = ref(false)
+
+// Active Form State
 const latitude = ref<number | null>(null)
 const longitude = ref<number | null>(null)
-const isMapExpanded = ref(false)
+const locationAddress = ref('')
+const pickupPreference = ref<'deliver' | 'pickup' | 'community'>('deliver')
+
+// Caching States for Switching Modes
+const postLat = ref<number | null>(null)
+const postLng = ref<number | null>(null)
+const postAddress = ref('')
+const userLat = ref<number | null>(null)
+const userLng = ref<number | null>(null)
+const userAddress = ref('')
+
+// --- Image Upload State ---
+const imagePreviews = ref<string[]>([])
+const imageFiles = ref<File[]>([])
+const fileInputRef = ref<HTMLInputElement | null>(null)
 
 // Synchronize state with native HTML dialog methods
 watch(isOpen, async (open) => {
   if (open) {
     dialogRef.value?.showModal()
-    // Wait for the dialog to actually render in the DOM before injecting the map
+
+    // Reset cache on open
+    userLat.value = null
+    userLng.value = null
+    userAddress.value = ''
+    pickupPreference.value = 'deliver'
+
+    // Reset images on open
+    imagePreviews.value = []
+    imageFiles.value = []
+
+    await fetchPostLocation()
+
     await nextTick()
     setTimeout(() => initMap(), 100)
   } else {
     dialogRef.value?.close()
-    // Cleanup map when closed to prevent memory leaks
     if (mapInstance) {
       mapInstance.remove()
       mapInstance = null
       markerInstance = null
+    }
+    // Cleanup images on close
+    imagePreviews.value = []
+    imageFiles.value = []
+  }
+})
+
+// Fetch the project location to use when "deliver" is selected
+async function fetchPostLocation() {
+  if (!props.postId) return
+
+  try {
+    const { data, error } = await supabase
+      .from('cause_requests')
+      .select('latitude, longitude, location_address')
+      .eq('id', props.postId)
+      .single()
+
+    if (data) {
+      postLat.value = data.latitude
+      postLng.value = data.longitude
+      postAddress.value = data.location_address || ''
+
+      if (pickupPreference.value === 'deliver') {
+        latitude.value = postLat.value
+        longitude.value = postLng.value
+        locationAddress.value = postAddress.value
+      }
+    }
+  } catch (err) {
+    console.error("Failed to fetch post location:", err)
+  }
+}
+
+watch(pickupPreference, (newVal, oldVal) => {
+  if (oldVal !== 'deliver') {
+    userLat.value = latitude.value
+    userLng.value = longitude.value
+    userAddress.value = locationAddress.value
+  }
+
+  if (newVal === 'deliver') {
+    latitude.value = postLat.value
+    longitude.value = postLng.value
+    locationAddress.value = postAddress.value
+  } else {
+    latitude.value = userLat.value
+    longitude.value = userLng.value
+    locationAddress.value = userAddress.value
+  }
+
+  if (mapInstance) {
+    if (latitude.value && longitude.value) {
+      const latlng = [latitude.value, longitude.value] as L.LatLngTuple
+      mapInstance.setView(latlng, 15)
+
+      if (!markerInstance) {
+        markerInstance = L.marker(latlng).addTo(mapInstance)
+      } else {
+        markerInstance.setLatLng(latlng)
+      }
+    } else {
+      if (markerInstance) {
+        mapInstance.removeLayer(markerInstance)
+        markerInstance = null
+      }
+      mapInstance.setView([9.3068, 123.3054], 13)
     }
   }
 })
 
 function toggleMapExpand() {
   isMapExpanded.value = !isMapExpanded.value
-
-  // Leaflet needs to recalculate tile loading when the container size changes
   setTimeout(() => {
-    if (mapInstance) {
-      mapInstance.invalidateSize()
-    }
+    if (mapInstance) mapInstance.invalidateSize()
   }, 100)
 }
 
 function handleBackdropClick(e: MouseEvent) {
-  if (e.target === dialogRef.value) {
-    isOpen.value = false
-  }
+  if (e.target === dialogRef.value) isOpen.value = false
 }
 
-// Initialize Leaflet Map
 function initMap() {
   if (!mapContainer.value || mapInstance) return
 
-  // Default coordinates (Talisay, Cebu)
   const defaultLat = 9.3068
   const defaultLng = 123.3054
 
-  // Set zoom level to 13
-  mapInstance = L.map(mapContainer.value).setView([defaultLat, defaultLng], 13)
+  const startLat = latitude.value || defaultLat
+  const startLng = longitude.value || defaultLng
 
-  // Load OpenStreetMap tiles
+  mapInstance = L.map(mapContainer.value).setView([startLat, startLng], 14)
+
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors',
+    attribution: '&copy; OpenStreetMap',
     maxZoom: 19
   }).addTo(mapInstance)
 
-  // Listen for clicks to drop a pin
+  if (latitude.value && longitude.value) {
+    markerInstance = L.marker([latitude.value, longitude.value]).addTo(mapInstance)
+  }
+
   mapInstance.on('click', (e: L.LeafletMouseEvent) => {
+    if (pickupPreference.value === 'deliver') return
+
     const { lat, lng } = e.latlng
     latitude.value = lat
     longitude.value = lng
@@ -115,44 +208,50 @@ function initMap() {
   })
 }
 
+// --- Image Handlers ---
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+function handleFileUpload(event: Event) {
+  const target = event.target as HTMLInputElement
+  if (!target.files) return
+
+  const files = Array.from(target.files)
+  files.forEach((file) => {
+    imageFiles.value.push(file)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        imagePreviews.value.push(e.target.result as string)
+      }
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+function removeImage(index: number) {
+  imagePreviews.value.splice(index, 1)
+  imageFiles.value.splice(index, 1)
+}
+
 // Form State
 const title = ref('')
 const description = ref('')
-const pickupPreference = ref<'deliver' | 'pickup' | 'community'>('deliver')
-const locationAddress = ref('')
+const items = ref<PledgeItemDraft[]>([{ material_name: '', quantity: 1, unit: 'units' }])
 
-const items = ref<PledgeItemDraft[]>([
-  { material_name: '', quantity: 1, unit: 'units' }
-])
-
-function addItem() {
-  items.value.push({ material_name: '', quantity: 1, unit: 'units' })
-}
-
-function removeItem(index: number) {
-  if (items.value.length > 1) {
-    items.value.splice(index, 1)
-  }
-}
-
-function incrementItemQty(index: number) {
-  items.value[index].quantity++
-}
-
-function decrementItemQty(index: number) {
-  if (items.value[index].quantity > 1) {
-    items.value[index].quantity--
-  }
-}
+function addItem() { items.value.push({ material_name: '', quantity: 1, unit: 'units' }) }
+function removeItem(index: number) { if (items.value.length > 1) items.value.splice(index, 1) }
+function incrementItemQty(index: number) { items.value[index].quantity++ }
+function decrementItemQty(index: number) { if (items.value[index].quantity > 1) items.value[index].quantity-- }
 
 async function handleSubmit() {
   errorMessage.value = null
 
   if (!props.postId || props.postId === 'undefined') {
-    errorMessage.value = 'Error: Invalid Post ID.'
-    console.error('Invalid postId:', props.postId)
-    return
-  }
+      errorMessage.value = 'Error: Invalid Post ID.'
+      return
+    }
 
   const validItems = items.value.filter((i) => i.material_name.trim() !== '')
   if (validItems.length === 0) {
@@ -218,6 +317,25 @@ async function handleSubmit() {
 
     if (itemsError) throw new Error(itemsError.message)
 
+    // 3. Upload & Insert Images into pledge_images
+    for (const file of imageFiles.value) {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`
+      const filePath = `pledge-images/${fileName}` // Keeping them organized in a subfolder
+
+      const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file)
+
+      if (!uploadError) {
+        const { data } = supabase.storage.from('images').getPublicUrl(filePath)
+
+        await supabase.from('pledge_images').insert({
+          pledge_id: pledge.id,
+          image_url: data.publicUrl,
+          display_order: 99
+        })
+      }
+    }
+
     const totalQty = validItems.reduce((acc, curr) => acc + curr.quantity, 0)
     const summaryName = validItems.length === 1
       ? validItems[0].material_name
@@ -230,6 +348,8 @@ async function handleSubmit() {
     latitude.value = null
     longitude.value = null
     items.value = [{ material_name: '', quantity: 1, unit: 'units' }]
+    imagePreviews.value = []
+    imageFiles.value = []
 
     emit('submitted', { pledgeId: pledge.id, quantity: totalQty, materialName: summaryName })
     isOpen.value = false
@@ -277,7 +397,7 @@ async function handleSubmit() {
 
         <!-- Body Form Grid -->
         <div class="form-grid">
-          <!-- Left Column: Material Line Items -->
+          <!-- Left Column: Material Line Items & Details -->
           <div class="form-column">
             <div class="section-label-row">
               <label class="form-label">Materials Offered</label>
@@ -309,12 +429,7 @@ async function handleSubmit() {
                     />
                   </div>
                 </div>
-                <button
-                  v-if="items.length > 1"
-                  type="button"
-                  class="delete-item-btn"
-                  @click="removeItem(idx)"
-                >
+                <button v-if="items.length > 1" type="button" class="delete-item-btn" @click="removeItem(idx)">
                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
                   </svg>
@@ -331,15 +446,58 @@ async function handleSubmit() {
               <label class="form-label">Description of Materials</label>
               <textarea v-model="description" class="form-textarea" placeholder="Describe the condition, cleanliness, or batch details..."></textarea>
             </div>
+
+            <!-- Image Uploader inside Left Column -->
+            <div class="form-group">
+              <label class="form-label">Photos (Optional)</label>
+              <div class="photo-grid">
+                <button type="button" class="upload-box" @click="triggerFileInput">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                    <circle cx="12" cy="13" r="4" />
+                  </svg>
+                  <span>Upload</span>
+                  <input
+                    ref="fileInputRef"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    class="hidden-file-input"
+                    @change="handleFileUpload"
+                  />
+                </button>
+
+                <div v-for="(img, idx) in imagePreviews" :key="idx" class="thumbnail-box">
+                  <img :src="img" alt="Uploaded preview" />
+                  <button type="button" class="delete-photo-btn" @click="removeImage(idx)">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           <!-- Right Column: Logistics & Location -->
           <div class="form-column">
             <div class="form-group map-group">
+              <!-- Smart Labeling -->
               <div class="section-label-row">
-                <label class="form-label">Drop-off / Pickup Location</label>
-                <span v-if="latitude" class="text-hint" style="color:#778732; font-size: 0.8rem;">Pin dropped!</span>
-                <span v-else class="text-hint" style="color:#6b7280; font-size: 0.8rem;">Click map to drop a pin</span>
+                <label class="form-label">
+                  {{ pickupPreference === 'deliver' ? 'Drop-off Location (Project Address)' : 'Pickup / Meetup Location' }}
+                </label>
+
+                <span v-if="pickupPreference === 'deliver'">
+                  <span v-if="latitude" class="text-hint neutral-hint">Map is view-only</span>
+                  <span v-else class="text-hint" style="color: #b91c1c;">No project location set</span>
+                </span>
+                <span v-else>
+                  <span v-if="latitude" class="text-hint" style="color:#778732;">Pin dropped!</span>
+                  <span v-else class="text-hint neutral-hint">Click map to drop a pin</span>
+                </span>
               </div>
 
               <!-- Leaflet Map Container -->
@@ -362,7 +520,15 @@ async function handleSubmit() {
                   <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
                   <circle cx="12" cy="10" r="3"/>
                 </svg>
-                <input v-model="locationAddress" type="text" class="form-input location-input" placeholder="Type specific address details (optional)..." />
+                <!-- Lock the text input when 'deliver' is active -->
+                <input
+                  v-model="locationAddress"
+                  type="text"
+                  class="form-input location-input"
+                  :readonly="pickupPreference === 'deliver'"
+                  :class="{ 'read-only-input': pickupPreference === 'deliver' }"
+                  :placeholder="pickupPreference === 'deliver' && !locationAddress ? 'No address provided by project organizer' : 'Type specific address details (optional)...'"
+                />
               </div>
             </div>
 
@@ -394,7 +560,11 @@ async function handleSubmit() {
         <!-- Footer Actions -->
         <div class="modal-footer">
           <button type="button" class="submit-btn" :disabled="isSubmitting" @click="handleSubmit">
-            <span v-if="isSubmitting">Submitting...</span>
+            <!-- Loading Spinner -->
+            <svg v-if="isSubmitting" class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
+            </svg>
+            <span v-if="isSubmitting" style="margin-left: 8px;">Submitting...</span>
             <span v-else>Confirm Donation</span>
           </button>
           <button type="button" class="cancel-btn" :disabled="isSubmitting" @click="isOpen = false">
@@ -466,7 +636,7 @@ async function handleSubmit() {
 
 .divider {
   height: 1px;
-  background: #e5e5e5;
+  background: #e5e7eb;
 }
 
 .error-banner {
@@ -520,6 +690,19 @@ async function handleSubmit() {
 
 .add-row-btn:hover {
   background: #f0f4ea;
+}
+
+.text-btn {
+  background: none;
+  border: none;
+  color: #778732;
+  font-weight: 500;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.text-btn:hover {
+  text-decoration: underline;
 }
 
 .items-scroll-list {
@@ -619,6 +802,7 @@ async function handleSubmit() {
   gap: 6px;
 }
 
+/* Map specific */
 .map-group {
   gap: 10px;
 }
@@ -631,14 +815,28 @@ async function handleSubmit() {
   border: 1px solid #e5e7eb;
 }
 
+.map-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .location-address {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
+}
+
+.location-address svg {
+  position: absolute;
+  left: 14px;
 }
 
 .location-input {
   flex: 1;
+  padding-left: 40px !important;
 }
 
 .form-input, .form-textarea {
@@ -740,6 +938,9 @@ async function handleSubmit() {
   font-weight: 500;
   cursor: pointer;
   transition: background 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .submit-btn:hover:not(:disabled) {
@@ -771,7 +972,7 @@ async function handleSubmit() {
   cursor: not-allowed;
 }
 
-/* --- Custom Map Enlarge Styles --- */
+/* Map Enlarge Styles */
 .map-wrapper {
   position: relative;
   width: 100%;
@@ -814,5 +1015,91 @@ async function handleSubmit() {
   height: 100vh;
   border-radius: 0;
   border: none;
+}
+
+/* Read-only visual indication */
+.read-only-input {
+  background-color: #f9fafb !important;
+  color: #6b7280;
+  cursor: not-allowed;
+  border-color: #e5e7eb !important;
+  box-shadow: none !important;
+}
+
+.neutral-hint { color: #6b7280; }
+
+/* Photo Uploader Specifics */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.upload-box {
+  height: 96px;
+  background: #f7f8f6;
+  border: 1px dashed #e4e7e3;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.upload-box:hover {
+  background: #edf0ec;
+}
+
+.upload-box span {
+  font-size: 11px;
+  font-weight: 500;
+  color: #8f9a8f;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.thumbnail-box {
+  position: relative;
+  height: 96px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e4e7e3;
+}
+
+.thumbnail-box img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.delete-photo-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  background: rgba(26, 29, 26, 0.8);
+  border: none;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
 }
 </style>
