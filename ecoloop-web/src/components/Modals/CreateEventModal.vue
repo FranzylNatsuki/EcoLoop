@@ -1,14 +1,22 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
-import {
-  Calendar,
-  X,
-  ChevronDown,
-  Camera,
-  MapPin,
-  ChevronRight
-} from 'lucide-vue-next'
+import { ref, watch, nextTick } from 'vue'
+import { Calendar, X, ChevronDown, Camera, MapPin, ChevronRight } from 'lucide-vue-next'
 import RequestMaterialsModal from './RequestMaterialsModal.vue'
+
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+// --- Vite Leaflet Icon Fix ---
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow
+})
+// -----------------------------
 
 const isOpen = defineModel<boolean>({ default: false })
 const dialogRef = ref<HTMLDialogElement | null>(null)
@@ -31,6 +39,8 @@ const formData = ref({
   startTime: '',
   endTime: '',
   location: '',
+  latitude: null as number | null,
+  longitude: null as number | null,
   organizer: ''
 })
 
@@ -42,20 +52,73 @@ const categories = [
   'Tree Planting'
 ]
 
-// Dynamic OpenStreetMap embed URL based on entered location
-const mapEmbedUrl = computed(() => {
-  if (!formData.value.location.trim()) return ''
-  const query = encodeURIComponent(formData.value.location)
-  return `https://maps.google.com/maps?q=${query}&t=&z=13&ie=UTF8&iwloc=&output=embed`
-})
+// --- Map State & Logic ---
+const mapContainer = ref<HTMLElement | null>(null)
+let mapInstance: L.Map | null = null
+let markerInstance: L.Marker | null = null
+const isMapExpanded = ref(false)
 
-watch(isOpen, (open) => {
+function toggleMapExpand() {
+  isMapExpanded.value = !isMapExpanded.value
+  setTimeout(() => {
+    if (mapInstance) mapInstance.invalidateSize()
+  }, 100)
+}
+
+watch(isOpen, async (open) => {
   if (open) {
     dialogRef.value?.showModal()
+
+    // Wait for the dialog to render before mounting the map
+    await nextTick()
+    setTimeout(() => initMap(), 100)
   } else {
     dialogRef.value?.close()
+
+    // Cleanup map on close
+    if (mapInstance) {
+      mapInstance.remove()
+      mapInstance = null
+      markerInstance = null
+    }
   }
 }, { immediate: true })
+
+function initMap() {
+  if (!mapContainer.value || mapInstance) return
+
+  // Default coordinates (Dumaguete)
+  const defaultLat = 9.3068
+  const defaultLng = 123.3054
+
+  const startLat = formData.value.latitude || defaultLat
+  const startLng = formData.value.longitude || defaultLng
+
+  mapInstance = L.map(mapContainer.value).setView([startLat, startLng], 14)
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap',
+    maxZoom: 19
+  }).addTo(mapInstance)
+
+  // Put a pin if we already have coordinates
+  if (formData.value.latitude && formData.value.longitude) {
+    markerInstance = L.marker([formData.value.latitude, formData.value.longitude]).addTo(mapInstance)
+  }
+
+  // Update formData when the user clicks the map!
+  mapInstance.on('click', (e: L.LeafletMouseEvent) => {
+    const { lat, lng } = e.latlng
+    formData.value.latitude = lat
+    formData.value.longitude = lng
+
+    if (!markerInstance) {
+      markerInstance = L.marker([lat, lng]).addTo(mapInstance!)
+    } else {
+      markerInstance.setLatLng([lat, lng])
+    }
+  })
+}
 
 function handleBackdropClick(e: MouseEvent) {
   if (e.target === dialogRef.value) {
@@ -63,6 +126,7 @@ function handleBackdropClick(e: MouseEvent) {
   }
 }
 
+// --- Image Handling ---
 function triggerFileInput() {
   fileInputRef.value?.click()
 }
@@ -74,22 +138,22 @@ function handleFileUpload(event: Event) {
   if (input.files && input.files[0]) {
     const file = input.files[0]
 
-    // 2. Save the RAW file object to upload later
+    // 1. Save the RAW file object to upload later
     selectedFile.value = file
 
-    // Keep the blob ONLY for the UI preview in this modal
+    // 2. Keep the blob ONLY for the UI preview in this modal
     formData.value.bannerImage = URL.createObjectURL(file)
   }
 }
 
 function removeBanner() {
   formData.value.bannerImage = ''
-  // 3. Clear the raw file if they remove the image
+  // Clear the raw file if they remove the image
   selectedFile.value = null
 }
 
 function handleSubmit() {
-  // 4. Attach the rawFile to the draft data so it gets passed to the next modal
+  // Attach the rawFile to the draft data so it gets passed to the next modal
   draftEventData.value = {
     ...formData.value,
     rawFile: selectedFile.value
@@ -253,19 +317,26 @@ function handleMaterialsPublish(payload: { event: any; materials: any[] }) {
                 placeholder="Street Address, City, State"
                 required
               />
-              <div class="map-mockup-wrapper">
-                <iframe
-                  v-if="mapEmbedUrl"
-                  :src="mapEmbedUrl"
-                  class="map-iframe"
-                  loading="lazy"
-                  referrerpolicy="no-referrer-when-downgrade"
-                ></iframe>
-                <div v-else class="map-placeholder">
-                  <MapPin :size="20" color="#778732" />
-                  <span>Enter location to display map</span>
-                </div>
+
+              <!-- Leaflet Map Container -->
+              <div class="map-wrapper" :class="{ 'is-expanded': isMapExpanded }">
+                <div ref="mapContainer" class="map-preview"></div>
+
+                <!-- Floating Enlarge/Shrink Button -->
+                <button type="button" class="expand-map-btn" @click.prevent="toggleMapExpand" title="Toggle Fullscreen">
+                  <svg v-if="!isMapExpanded" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
+                  </svg>
+                  <svg v-else xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 14h6v6"/><path d="M20 10h-6V4"/><path d="M14 10l7-7"/><path d="M3 21l7-7"/>
+                  </svg>
+                </button>
               </div>
+
+              <!-- Helpful prompt -->
+              <p v-if="!formData.latitude" style="font-size: 12px; color: #8F9A8F; margin-top: 6px; margin-bottom: 0;">
+                Tap on the map to drop a pin for the exact location.
+              </p>
             </div>
 
             <div class="form-group">
@@ -304,48 +375,46 @@ function handleMaterialsPublish(payload: { event: any; materials: any[] }) {
 
 <style scoped>
 .modal-backdrop {
-    border: none;
-    padding: 0;
-    background:
-    transparent;
-    max-width:
-    100vw;
-    max-height: 100vh;
+  border: none;
+  padding: 0;
+  background: transparent;
+  max-width: 100vw;
+  max-height: 100vh;
 }
 .modal-backdrop::backdrop { background: rgba(0, 0, 0, 0.4); }
 .create-event-modal-card {
-    width: 740px;
-    padding: 28px;
-    background: #ffffff;
-    box-shadow: 0px 16px 40px rgba(26, 29, 26, 0.15);
-    border-radius: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    box-sizing: border-box;
+  width: 740px;
+  padding: 28px;
+  background: #ffffff;
+  box-shadow: 0px 16px 40px rgba(26, 29, 26, 0.15);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  box-sizing: border-box;
 }
 .header-row {
-    width: 100%;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 .title-group { display: flex; align-items: center; gap: 10px; }
 .header-icon-wrap {
-    padding: 8px;
-    background: rgba(119, 135, 50, 0.10);
-    border-radius: 8px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  padding: 8px;
+  background: rgba(119, 135, 50, 0.10);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 .create-new-event-title {
-    margin: 0;
-    color: #1A1D1A;
-    font-size: 22px;
-    font-family: 'Outfit', sans-serif;
-    font-weight: 700;
-    line-height: 1.2;
+  margin: 0;
+  color: #1A1D1A;
+  font-size: 22px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 700;
+  line-height: 1.2;
 }
 .btn-close { width: 36px; height: 32px; background: #F7F8F6; border: none; border-radius: 18px; display: flex; justify-content: center; align-items: center; cursor: pointer; transition: background-color 0.2s ease; }
 .btn-close:hover { background: #E4E7E3; }
@@ -371,12 +440,65 @@ function handleMaterialsPublish(payload: { event: any; materials: any[] }) {
 .btn-delete-photo { width: 20px; height: 20px; position: absolute; top: 6px; right: 6px; background: rgba(26, 29, 26, 0.80); border: none; border-radius: 50%; display: flex; justify-content: center; align-items: center; cursor: pointer; }
 .time-fields-row { display: flex; gap: 12px; width: 100%; }
 .flex-1 { flex: 1; }
-.map-mockup-wrapper { width: 100%; height: 120px; margin-top: 8px; overflow: hidden; border-radius: 8px; border: 1px solid #E4E7E3; background: #EAECE8; display: flex; justify-content: center; align-items: center; position: relative; }
-.map-iframe { width: 100%; height: 100%; border: none; }
-.map-placeholder { display: flex; align-items: center; gap: 8px; color: #8F9A8F; font-size: 13px; font-family: 'Geist', sans-serif; font-weight: 500; }
 .action-group { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 16px; }
 .btn-submit { width: 100%; padding: 14px 0; background: #778732; border: none; border-radius: 24px; display: flex; justify-content: center; align-items: center; gap: 8px; color: #ffffff; font-size: 16px; font-family: 'Outfit', sans-serif; font-weight: 700; cursor: pointer; transition: background-color 0.2s ease; }
 .btn-submit:hover { background: #65732A; }
 .btn-cancel { background: transparent; border: none; color: #8F9A8F; font-size: 14px; font-family: 'Outfit', sans-serif; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .btn-cancel:hover { color: #1A1D1A; }
+
+/* Map Enlarge Styles */
+.map-wrapper {
+  position: relative;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.map-preview {
+  width: 100%;
+  height: 200px;
+  border-radius: 8px;
+  border: 1px solid #E4E7E3;
+  z-index: 1;
+}
+
+.expand-map-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1000;
+  background: white;
+  border: 2px solid rgba(0,0,0,0.2);
+  border-radius: 4px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #374151;
+  box-shadow: 0 1px 5px rgba(0,0,0,0.2);
+  transition: background 0.2s;
+}
+
+.expand-map-btn:hover {
+  background: #f3f4f6;
+}
+
+/* Fullscreen Mode Classes */
+.map-wrapper.is-expanded {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 999999;
+  background: white;
+  margin-top: 0;
+}
+
+.map-wrapper.is-expanded .map-preview {
+  height: 100vh;
+  border-radius: 0;
+  border: none;
+}
 </style>

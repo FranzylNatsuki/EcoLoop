@@ -1,14 +1,15 @@
 import { ref, onMounted } from 'vue'
-import { supabase } from './useAuth' // Matched to your usePosts import
+import { supabase } from './useAuth'
 
-// 1. Updated Interfaces to match Supabase schema & your project style
 export interface Author {
   full_name: string
   Avatar: string
   about?: string
 }
 
+// RESTORED TO MATCH UI EXPECTATIONS
 export interface MaterialNeed {
+  id?: string
   material: string
   target: number
   current: number
@@ -50,6 +51,8 @@ export interface EventItem {
   event_title: string
   schedule: string
   location: string
+  latitude?: number | null
+  longitude?: number | null
   description: string
   category: string
   image: string
@@ -67,6 +70,8 @@ export interface CreateEventPayload {
   description: string
   category: string
   location: string
+  latitude?: number | null
+  longitude?: number | null
   event_date: string
   banner_url?: string
   materials_needed?: MaterialNeed[]
@@ -74,34 +79,37 @@ export interface CreateEventPayload {
 
 export interface SubmitPledgePayload {
   eventId: string
-  itemName: string // Will be mapped to material_name in DB
+  itemName: string
   quantity: number
   unit: string
 }
 
-// Global state outside composable (same as usePosts)
 const events = ref<EventItem[]>([])
 const loading = ref(false)
 
 export function useEvents() {
-  // --- Helper Functions ---
-  function parseMaterials(materialsJson: any): MaterialNeed[] {
-    try {
-      const parsed = typeof materialsJson === 'string' ? JSON.parse(materialsJson) : materialsJson
-      if (!Array.isArray(parsed)) return []
-      return parsed.map((m: any) => ({
-        material: m.material || m.name || 'Material',
-        unit: m.unit || 'pcs',
-        target: Number(m.target || m.quantity) || 0,
-        current: Number(m.current) || 0
-      }))
-    } catch {
-      return []
-    }
+
+  function parseMaterials(materialsJson: any): any[] {
+      try {
+        const parsed = typeof materialsJson === 'string' ? JSON.parse(materialsJson) : materialsJson
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return []
+      }
   }
 
   function transformSupabaseToEventItem(row: any): EventItem {
-    const materials = parseMaterials(row.materials_needed)
+    // 1. ADAPTER: Translate new DB columns to what the UI expects
+    const rawMaterials = row.event_materials || parseMaterials(row.materials_needed)
+
+    const materials: MaterialNeed[] = rawMaterials.map((m: any) => ({
+      id: m.id,
+      material: m.material_name || m.material || m.name || 'Material', // Maps DB to UI
+      target: Number(m.target_quantity || m.target || m.quantity) || 0, // Maps DB to UI
+      current: Number(m.current_quantity || m.current) || 0,            // Maps DB to UI
+      unit: m.unit || 'pcs'
+    }))
+
     const totalTarget = materials.reduce((acc, m) => acc + m.target, 0)
     const totalCurrent = materials.reduce((acc, m) => acc + m.current, 0)
     const fulfillmentPercent = totalTarget > 0 ? Math.min(100, Math.round((totalCurrent / totalTarget) * 100)) : 0
@@ -110,7 +118,6 @@ export function useEvents() {
     const diffTime = eventDate.getTime() - Date.now()
     const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
 
-    // Flatten nested Author logic based on your usePosts pattern
     const authorFullName = row.author?.full_name || 'Community Organizer'
     const authorAvatar = row.author?.profile_data?.Avatar || 'https://placehold.co/44x44'
     const authorBio = row.author?.profile_data?.about || ''
@@ -121,10 +128,12 @@ export function useEvents() {
       event_title: row.title || 'Untitled Event',
       schedule: row.event_date || '',
       location: row.location || 'Location TBA',
+      latitude: row.latitude,
+      longitude: row.longitude,
       description: row.description || '',
       category: row.category || 'General',
       image: row.banner_url || '',
-      materials_needed: materials,
+      materials_needed: materials, // Passed exactly as UI expects
       fulfillment_percent: fulfillmentPercent,
       organizer: {
         name: authorFullName,
@@ -140,7 +149,7 @@ export function useEvents() {
     }
   }
 
-  // 2. Fetch Events using Supabase relational joins
+  // 2. Fetch Events
   async function fetchEvents(options?: { category?: string; limit?: number }) {
     loading.value = true
     try {
@@ -150,11 +159,9 @@ export function useEvents() {
           *,
           author:profiles!author_id (
             full_name,
-            profile_data:profile_data_fk (
-              Avatar,
-              about
-            )
-          )
+            profile_data:profile_data_fk ( Avatar, about )
+          ),
+          event_materials ( id, material_name, target_quantity, current_quantity, unit )
         `)
         .order('created_at', { ascending: false })
 
@@ -179,7 +186,7 @@ export function useEvents() {
     }
   }
 
-  // 3. Fetch Single Event with Nested Pledges
+  // 3. Fetch Single Event
   async function fetchEventById(id: string): Promise<EventItem | null> {
     try {
       const { data, error } = await supabase
@@ -189,7 +196,8 @@ export function useEvents() {
           author:profiles!author_id (
             full_name,
             profile_data:profile_data_fk ( Avatar, about )
-          )
+          ),
+          event_materials ( id, material_name, target_quantity, current_quantity, unit )
         `)
         .eq('id', id)
         .single()
@@ -197,7 +205,6 @@ export function useEvents() {
       if (error) throw error
       if (!data) return null
 
-      // Fetch Recent Pledges (with corrected schema column names!)
       const { data: pledgeItemsData, error: pledgeError } = await supabase
         .from('event_pledge_items')
         .select(`
@@ -224,7 +231,6 @@ export function useEvents() {
         time: new Date(item.created_at).toLocaleDateString()
       }))
 
-      // Fetch Top Donors
       const { data: topDonorsData } = await supabase
         .from('event_pledge_items')
         .select(`
@@ -249,17 +255,19 @@ export function useEvents() {
         time: 'Top Contributor'
       }))
 
-      // Fetch Related Events
       const { data: relatedData } = await supabase
         .from('events')
-        .select('id, title, category, banner_url, materials_needed')
+        .select(`
+          id, title, category, banner_url, materials_needed,
+          event_materials ( target_quantity, current_quantity )
+        `)
         .neq('id', id)
         .limit(3)
 
       const relatedEvents: RelatedEvent[] = (relatedData || []).map((rel: any) => {
-        const relMaterials = parseMaterials(rel.materials_needed)
-        const relTarget = relMaterials.reduce((acc, m) => acc + m.target, 0)
-        const relCurrent = relMaterials.reduce((acc, m) => acc + m.current, 0)
+        const relMaterials = rel.event_materials || parseMaterials(rel.materials_needed)
+        const relTarget = relMaterials.reduce((acc: number, m: any) => acc + (m.target_quantity || m.target || 0), 0)
+        const relCurrent = relMaterials.reduce((acc: number, m: any) => acc + (m.current_quantity || m.current || 0), 0)
 
         return {
           id: rel.id,
@@ -290,75 +298,79 @@ export function useEvents() {
     }
   }
 
-  // 4. Add Event using Supabase Auth (Matched to usePosts style)
+  // 4. Create Event
   async function createEvent(newEventData: CreateEventPayload) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-      if (sessionError || !session) {
-        console.warn("Unauthorized: Must be logged in to post an event.")
-        return { success: false, error: 'Unauthorized' }
-      }
+      if (sessionError || !session) return { success: false, error: 'Unauthorized' }
 
-      const userId = session.user.id
-
-      const { data, error } = await supabase
+      const { data: eventData, error: eventError } = await supabase
         .from('events')
         .insert({
-          author_id: userId,
+          author_id: session.user.id,
           title: newEventData.title,
           description: newEventData.description,
           category: newEventData.category,
           location: newEventData.location,
+          latitude: newEventData.latitude || null,
+          longitude: newEventData.longitude || null,
           event_date: newEventData.event_date,
-          banner_url: newEventData.banner_url || null,
-          materials_needed: JSON.stringify(newEventData.materials_needed || [])
+          banner_url: newEventData.banner_url || null
         })
         .select()
         .single()
 
-      if (error) throw error
+      if (eventError) throw eventError
 
-      // Refresh the local list to show the new event instantly
+      if (newEventData.materials_needed && newEventData.materials_needed.length > 0) {
+        // ADAPTER: Translate the UI's 'material' back into the DB's 'material_name'
+        const materialInserts = newEventData.materials_needed.map(m => ({
+          event_id: eventData.id,
+          material_name: m.material, // Matches UI
+          target_quantity: m.target, // Matches UI
+          current_quantity: 0,
+          unit: m.unit
+        }))
+
+        const { error: materialsError } = await supabase
+          .from('event_materials')
+          .insert(materialInserts)
+
+        if (materialsError) throw materialsError
+      }
+
       await fetchEvents()
-
-      return { success: true, data }
+      return { success: true, data: eventData }
     } catch (err: any) {
       console.error('Error saving event to Supabase:', err.message || err)
       return { success: false, error: err.message || err }
     }
   }
 
-  // 5. Submit Pledge (Includes the DB schema bug fixes)
+  // 5. Submit Pledge
   async function submitPledge(payload: SubmitPledgePayload) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-      if (sessionError || !session) {
-        console.warn("Unauthorized: Must be logged in to donate.")
-        return { success: false, error: 'Unauthorized' }
-      }
+      if (sessionError || !session) return { success: false, error: 'Unauthorized' }
 
-      const userId = session.user.id
-
-      // Step A: Insert Pledge Header
       const { data: pledgeData, error: pledgeError } = await supabase
         .from('event_pledges')
         .insert([{
           event_id: payload.eventId,
-          donor_id: userId // Schema required donor_id
+          donor_id: session.user.id
         }])
         .select()
         .single()
 
       if (pledgeError) throw pledgeError
 
-      // Step B: Insert Pledge Items
       const { error: itemError } = await supabase
         .from('event_pledge_items')
         .insert([{
           event_pledge_id: pledgeData.id,
-          material_name: payload.itemName, // Schema required material_name
+          material_name: payload.itemName,
           quantity: payload.quantity,
           unit: payload.unit
         }])
@@ -372,7 +384,6 @@ export function useEvents() {
     }
   }
 
-  // 6. Auto-fetch on mount (Same logic as usePosts)
   onMounted(() => {
     if (events.value.length === 0) {
       fetchEvents()

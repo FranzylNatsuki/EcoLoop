@@ -5,7 +5,7 @@ import CreateEventModal from './CreateEventModal.vue'
 import CreateCauseModal from './CreatePost.vue'
 import { usePosts, type CreatePostPayload } from '../../composables/usePosts'
 import { useEvents } from '../../composables/useEvents'
-import { supabase } from '../../composables/useAuth' // (or wherever you initialized your client)
+import { supabase } from '../../composables/useAuth'
 
 // Composables
 const { addPost } = usePosts()
@@ -74,10 +74,10 @@ async function handlePublish(payload: unknown) {
     // 1. Intercept and upload the raw file to Supabase Storage
     if (payload.event.rawFile) {
       const file = payload.event.rawFile
-      const filePath = `event-banners/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}` // Clean filename
+      const filePath = `event-banners/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`
 
       const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('images') // Ensure this matches your actual bucket name!
+        .from('images')
         .upload(filePath, file)
 
       if (uploadError) {
@@ -85,7 +85,6 @@ async function handlePublish(payload: unknown) {
         return
       }
 
-      // 2. Retrieve the permanent public URL
       const { data: publicUrlData } = supabase.storage
         .from('images')
         .getPublicUrl(filePath)
@@ -93,22 +92,24 @@ async function handlePublish(payload: unknown) {
       finalBannerUrl = publicUrlData.publicUrl
     }
 
-    // 3. Format materials
-    const formattedMaterials = (payload.materials || []).map((m) => ({
-      material: m.name || m.material || 'Material',
-      target: Number(m.target || m.quantity || 1),
-      current: Number(m.current || 0),
-      unit: m.unit || 'pcs'
-    }))
+    // 2. Format materials to match the NEW database schema (3NF)
+        const formattedMaterials = (payload.materials || []).map((m: any) => ({
+          material: m.name || m.material_name || m.material || 'Material',
+          target: Number(m.target_quantity || m.target || m.quantity || 1),
+          current: Number(m.current_quantity || m.current || 0),
+          unit: m.unit || 'pcs'
+        }))
 
-    // 4. Save to Database using the permanent URL
+    // 3. Save to Database using the permanent URL AND Coordinates
     const result = await createEvent({
       title: payload.event.title,
       description: payload.event.description,
       category: payload.event.category,
       location: payload.event.location,
-      event_date: `${payload.event.date}T${payload.event.startTime || '00:00'}:00`, // Combined date/time safely
-      banner_url: finalBannerUrl, // <-- Using the real URL here!
+      latitude: payload.event.latitude || null,   // <-- Added map latitude
+      longitude: payload.event.longitude || null, // <-- Added map longitude
+      event_date: `${payload.event.date}T${payload.event.startTime || '00:00'}:00`,
+      banner_url: finalBannerUrl,
       materials_needed: formattedMaterials
     })
 
