@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { useRouter} from 'vue-router'
 import { computed, onMounted, ref } from 'vue'
-import VotePanel from './VotePanel.vue'
+// import VotePanel from './VotePanel.vue'
 import PostActions from './PostActions.vue'
 import { supabase } from '../../composables/useAuth'
 
-// 1. Updated interface to match the Supabase data
 interface PostImage {
   image_url: string
   display_order: number
@@ -20,9 +19,10 @@ interface Post {
   comment_count: number
   category: string
   created_at: string
-  author_id?: string       // <-- 1. Add author_id to the interface
+  is_completed: boolean // <-- Added completion state
+  author_id?: string
   author: {
-    id?: string;           // <-- Alternatively, it might be nested in the author object
+    id?: string;
     full_name: string;
     Avatar: string
   }
@@ -31,7 +31,6 @@ interface Post {
 const props = defineProps<{ post: Post }>()
 const router = useRouter()
 
-// 1. Store the logged-in user's ID locally in the component
 const myId = ref<string | null>(null)
 
 onMounted(async () => {
@@ -41,16 +40,12 @@ onMounted(async () => {
   }
 })
 
-// 2. Check if the logged-in user owns this post
 const isOwner = computed(() => {
   const postAuthorId = props.post.author_id || props.post.author?.id
-
   if (!myId.value || !postAuthorId) return false
-
   return myId.value === postAuthorId
 })
 
-// 2. Safely extract the first image to use as the cover
 const coverImage = computed(() => {
   if (props.post.post_images && props.post.post_images.length > 0) {
     const sortedImages = [...props.post.post_images].sort((a, b) => a.display_order - b.display_order)
@@ -59,7 +54,6 @@ const coverImage = computed(() => {
   return null
 })
 
-// 3. Count any remaining images for the "+X" badge
 const extraImagesCount = computed(() => {
   if (props.post.post_images && props.post.post_images.length > 1) {
     return props.post.post_images.length - 1
@@ -73,40 +67,43 @@ function openPost() {
 </script>
 
 <template>
-  <article class="post-card" @click="openPost">
-    <!-- Updated: votes -> vote_count -->
-    <VotePanel :votes="post.vote_count" @click.stop />
+  <article class="post-card" :class="{ 'is-completed': post.is_completed }" @click="openPost">
+    <!-- <VotePanel :votes="post.vote_count" @click.stop /> -->
 
     <div class="post-content">
       <div class="post-meta">
-        <!-- Updated: avatar -> Avatar, name -> full_name -->
         <img :src="post.author.Avatar" :alt="post.author.full_name" class="avatar" />
         <span class="author-name">{{ post.author.full_name }}</span>
         <span class="meta-dot">•</span>
-        <!-- Updated: createdAt -> created_at (and formatted for readability) -->
         <span class="time-ago">{{ new Date(post.created_at).toLocaleDateString() }}</span>
-        <span class="category">{{ post.category }}</span>
+
+        <!-- Updated: Switch between Category and Completed Badge -->
+        <span v-if="post.is_completed" class="completed-badge">
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+          Completed
+        </span>
+        <span v-else class="category">{{ post.category }}</span>
       </div>
 
       <h2>{{ post.title }}</h2>
       <p>{{ post.body }}</p>
 
-      <!-- Updated: image -> coverImage (using the computed property) -->
       <div v-if="coverImage" class="image-container">
         <img :src="coverImage" :alt="post.title" class="post-image" />
-        <!-- Badge for multiple images (if you added the computed property) -->
         <div v-if="extraImagesCount > 0" class="more-images-badge">
           +{{ extraImagesCount }}
         </div>
       </div>
 
+      <!-- Passed is-completed prop down to PostActions -->
       <PostActions
+              :votes="post.vote_count"
               :comments="post.comment_count"
               :post-id="post.id"
               :is-owner="isOwner"
+              :is-completed="post.is_completed"
               :project-name="post.title"
               :author-username="post.author.full_name"
-              @click.stop
             />
     </div>
   </article>
@@ -122,12 +119,21 @@ function openPost() {
   width: 100%;
   box-sizing: border-box;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.2s ease;
 }
 
 .post-card:hover {
   border-color: #cfd6cc;
   box-shadow: 0 2px 8px rgba(31, 41, 33, 0.06);
+}
+
+/* Optional: slightly dim completed posts */
+.post-card.is-completed {
+  background: #fcfdfc;
+}
+.post-card.is-completed h2,
+.post-card.is-completed p {
+  opacity: 0.7;
 }
 
 .post-content {
@@ -174,6 +180,21 @@ function openPost() {
   font-weight: 600;
 }
 
+/* New badge for completed posts */
+.completed-badge {
+  margin-left: auto;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #e4e7e3;
+  color: #525a52;
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .post-content h2 {
   margin: 0 0 8px;
   font-family: 'Outfit', sans-serif;
@@ -190,6 +211,10 @@ function openPost() {
   line-height: 1.5;
 }
 
+.image-container {
+  position: relative;
+}
+
 .post-image {
   width: 100%;
   max-height: 360px;
@@ -197,5 +222,17 @@ function openPost() {
   border-radius: 8px;
   display: block;
   margin-bottom: 12px;
+}
+
+.more-images-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(26, 29, 26, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
 }
 </style>

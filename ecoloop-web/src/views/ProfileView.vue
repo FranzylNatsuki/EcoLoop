@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../composables/useAuth'
 import PostCard from '../components/posts/PostCard.vue'
-import SavedProjectsCard from '../components/sidebar/SavedProjectsCard.vue'
+// import SavedProjectsCard from '../components/sidebar/SavedProjectsCard.vue'
 import EditProfileModal from '../components/Modals/EditProfileModal.vue'
 import { usePosts } from '../composables/usePosts'
 import BackButton from '../components/common/BackButton.vue'
@@ -206,10 +206,11 @@ const userPosts = computed(() => {
                   <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
                   <span class="stat-label">Projects Supported</span>
                 </div>
+                <!--
                 <div class="stat-item">
                   <span class="stat-value">{{ profileData.profile_data?.MaterialsCollected || 0 }} lbs</span>
                   <span class="stat-label">Materials Collected</span>
-                </div>
+                </div> -->
                 <div class="stat-item">
                   <span class="stat-value">{{ profileData.profile_data?.CommunityScore || 0 }}/5</span>
                   <span class="stat-label">Community Score</span>
@@ -234,13 +235,14 @@ const userPosts = computed(() => {
         >
           Donations
         </button>
+        <!--
         <button
           class="tab-btn"
           :class="{ active: activeTab === 'saved' }"
           @click="activeTab = 'saved'"
         >
           Saved Projects
-        </button>
+        </button> -->
         <!--
         <button
           class="tab-btn"
@@ -281,10 +283,11 @@ const userPosts = computed(() => {
       </section>
 
       <!-- Right Sidebar Area -->
+      <!--
       <aside class="right-sidebar-column">
-        <!--<DonationHistoryCard />-->
+        <!--<DonationHistoryCard
         <SavedProjectsCard />
-      </aside>
+        </aside>  -->
     </div>
   </div>
   <EditProfileModal

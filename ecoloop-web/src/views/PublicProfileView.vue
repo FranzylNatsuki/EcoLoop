@@ -4,23 +4,25 @@ import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../composables/useAuth'
 import { usePosts } from '../composables/usePosts'
 import PostCard from '../components/posts/PostCard.vue'
-import DonationHistoryCard from '../components/sidebar/DonationHistoryCard.vue'
 import BackButton from '../components/common/BackButton.vue'
 import DonationCard from '../components/posts/DonationCard.vue'
 
 const route = useRoute()
-const router = useRouter() // <--- Initialize it
-// Grab the ID
-// from the URL (e.g., /user/1234-5678-abcd)
+const router = useRouter()
+
 const targetUserId = route.params.id as string
 
-// Removed 'settings' and 'saved' (usually saved posts are private)
 const activeTab = ref('posts')
 const profileData = ref<any>(null)
 const isLoading = ref(true)
 const publicPledges = ref<any[]>([])
 
-// Extract posts state
+// --- Rating State ---
+const currentUserId = ref<string | null>(null)
+const myRating = ref(0)
+const hoverRating = ref(0)
+const isSubmittingRating = ref(false)
+
 const { posts } = usePosts()
 
 onMounted(async () => {
@@ -31,13 +33,29 @@ onMounted(async () => {
   }
 
   const { data: { session } } = await supabase.auth.getSession()
-  if (session && session.user.id === targetUserId) {
+
+  if (session) {
+    currentUserId.value = session.user.id
+    if (session.user.id === targetUserId) {
       console.log("User clicked their own profile. Redirecting to private dashboard...")
-      router.push('/profile') // Send them to MyProfileView
-      return // Stop running the rest of the code!
+      router.push('/profile')
+      return
     }
 
-  // Fetch the target user's data directly from the URL param
+    // Fetch if the current user has already rated this profile
+    const { data: existingRating } = await supabase
+      .from('user_ratings')
+      .select('score')
+      .eq('rater_id', session.user.id)
+      .eq('ratee_id', targetUserId)
+      .maybeSingle() // <-- Fixed: Changed to maybeSingle() to avoid 406 errors
+
+    if (existingRating) {
+      myRating.value = existingRating.score
+    }
+  }
+
+  // Fetch the target user's data
   const { data, error } = await supabase
     .from('profiles')
     .select(`
@@ -47,47 +65,87 @@ onMounted(async () => {
     .eq('id', targetUserId)
     .single()
 
-  if (error) {
-    console.error("Failed to fetch public profile:", error.message)
-  }
+  if (error) console.error("Failed to fetch public profile:", error.message)
+  if (data) profileData.value = data
 
-  if (data) {
-    profileData.value = data
-  }
-
+  // Fetch completed pledges
   const { data: pledgesData, error: pledgesError } = await supabase
-      .from('pledges')
-      .select(`
-        *,
-        post:cause_requests(title),
-        items:pledge_items(material_name, quantity, unit)
-      `)
-      .eq('donor_id', targetUserId)
-      .eq('status', 'completed') // Only show completed donations publicly
-      .order('created_at', { ascending: false })
+    .from('pledges')
+    .select(`
+      *,
+      post:cause_requests(title, author_id),
+      items:pledge_items(material_name, quantity, unit)
+    `)
+    .eq('donor_id', targetUserId)
+    .eq('status', 'completed')
+    .order('created_at', { ascending: false })
 
-    if (!pledgesError && pledgesData) {
-      publicPledges.value = pledgesData
-    }
+  if (!pledgesError && pledgesData) {
+    publicPledges.value = pledgesData
+  }
 
+  // <-- Fixed: Turn off the loading state once everything is fetched
   isLoading.value = false
 })
 
-// Filter posts matching this specific user
+// <-- Fixed: Moved computed properties outside of onMounted
+const userPledges = computed(() => {
+  if (!publicPledges.value) return []
+  // Filter out any donations they made to their own projects
+  return publicPledges.value.filter(pledge => pledge.post?.author_id !== targetUserId)
+})
+
 const userPosts = computed(() => {
   if (!posts.value || !Array.isArray(posts.value) || !profileData.value) return []
   return posts.value.filter(post => post.author?.full_name === profileData.value.full_name)
 })
+
+// --- Submit Rating Logic ---
+async function submitRating(score: number) {
+  if (!currentUserId.value || isSubmittingRating.value) return
+
+  isSubmittingRating.value = true
+  myRating.value = score
+
+  try {
+    const { error } = await supabase
+      .from('user_ratings')
+      .upsert({
+        rater_id: currentUserId.value,
+        ratee_id: targetUserId,
+        score: score
+      }, {
+        onConflict: 'rater_id, ratee_id'
+      })
+
+    if (error) throw error
+
+    // Optimistically update the UI score visually
+    if (profileData.value?.profile_data) {
+      // Re-fetch just the score to ensure mathematical accuracy from the database trigger
+      const { data: updatedStats } = await supabase
+        .from('profile_data')
+        .select('"CommunityScore"')
+        .eq('id', targetUserId)
+        .single()
+
+      if (updatedStats) {
+        profileData.value.profile_data.CommunityScore = updatedStats.CommunityScore
+      }
+    }
+  } catch (err: any) {
+    console.error("Failed to submit rating:", err.message)
+    alert("Could not save rating.")
+  } finally {
+    isSubmittingRating.value = false
+  }
+}
 </script>
 
 <template>
   <div class="profile-page">
     <header class="profile-header-container">
-      <img
-        class="profile-banner"
-        src="../assets/profile-banner.png"
-        alt="User Profile Banner"
-      />
+      <img class="profile-banner" src="../assets/profile-banner.png" alt="User Profile Banner" />
 
       <div class="profile-info-block" v-if="!isLoading && profileData">
         <div class="avatar-overlap-wrapper">
@@ -107,10 +165,34 @@ const userPosts = computed(() => {
               <span class="user-subtext">Joined {{ new Date(profileData.created_at).getFullYear() }}</span>
             </div>
 
-            <!-- Replaced Edit Profile with a public interaction button -->
-            <button class="btn-edit-profile" style="background: rgba(119, 135, 50, 0.1); color: #778732;">
-              Follow User
-            </button>
+            <!-- Follow & Rating Block -->
+            <div class="actions-block">
+                <!--
+              <button class="btn-edit-profile" style="background: rgba(119, 135, 50, 0.1); color: #778732;">
+                Follow User
+              </button>
+              -->
+
+              <!-- Interactive Star Rating System -->
+              <div v-if="currentUserId" class="rating-widget">
+                <span class="rating-label">Rate:</span>
+                <div class="stars-container" @mouseleave="hoverRating = 0">
+                  <button
+                    v-for="star in 5"
+                    :key="star"
+                    class="star-btn"
+                    :class="{ 'is-active': star <= (hoverRating || myRating) }"
+                    :disabled="isSubmittingRating"
+                    @mouseover="hoverRating = star"
+                    @click="submitRating(star)"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <p class="user-bio">
@@ -137,10 +219,7 @@ const userPosts = computed(() => {
             <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
             <span class="stat-label">Projects Supported</span>
           </div>
-          <div class="stat-item">
-            <span class="stat-value">{{ profileData.profile_data?.MaterialsCollected || 0 }} lbs</span>
-            <span class="stat-label">Materials Collected</span>
-          </div>
+          <!-- Materials Collected Removed per instructions -->
           <div class="stat-item">
             <span class="stat-value">{{ profileData.profile_data?.CommunityScore || 0 }}/5</span>
             <span class="stat-label">Community Score</span>
@@ -149,20 +228,11 @@ const userPosts = computed(() => {
       </div>
       <div class="profile-stats-wrapper" v-else></div>
 
-      <!-- Stripped out 'Saved' and 'Settings' since this is a public view -->
       <nav class="profile-tabs" aria-label="Profile section tabs">
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'posts' }"
-          @click="activeTab = 'posts'"
-        >
+        <button class="tab-btn" :class="{ active: activeTab === 'posts' }" @click="activeTab = 'posts'">
           Posts
         </button>
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'donations' }"
-          @click="activeTab = 'donations'"
-        >
+        <button class="tab-btn" :class="{ active: activeTab === 'donations' }" @click="activeTab = 'donations'">
           Recent Activity
         </button>
       </nav>
@@ -171,41 +241,33 @@ const userPosts = computed(() => {
 
     <div class="main-layout-wrapper">
       <section class="left-feed-column">
-                      <BackButton />
+        <BackButton />
         <template v-if="activeTab === 'posts'">
           <div v-if="userPosts.length === 0" class="tab-placeholder-card">
             <p>This user hasn't posted anything yet.</p>
           </div>
-
-          <PostCard
-            v-else
-            v-for="post in userPosts"
-            :key="post.id"
-            :post="post"
-          />
+          <PostCard v-else v-for="post in userPosts" :key="post.id" :post="post" />
         </template>
 
-        <template v-else-if="activeTab === 'donations'">
-                  <div v-if="publicPledges.length === 0" class="tab-placeholder-card">
-                    <p>No recent activity to display.</p>
+        <!-- RECENT ACTIVITY (DONATIONS) TAB -->
+                <template v-else-if="activeTab === 'donations'">
+                  <div v-if="userPledges.length === 0" class="tab-placeholder-card">
+                    <p>No completed donations to other projects yet.</p>
                   </div>
 
                   <DonationCard
                     v-else
-                    v-for="pledge in publicPledges"
+                    v-for="pledge in userPledges"
                     :key="pledge.id"
                     :pledge="pledge"
                   />
                 </template>
-
-        <div v-else class="tab-placeholder-card">
-          <p>No recent activity to display.</p>
-        </div>
       </section>
 
+      <!--
       <aside class="right-sidebar-column">
         <DonationHistoryCard />
-      </aside>
+      </aside> -->
     </div>
   </div>
 </template>
@@ -234,21 +296,21 @@ const userPosts = computed(() => {
 
 .profile-info-block {
   width: 100%;
-  max-width: 1100px; /* This pulls it closer to the center! */
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 0 40px 24px 40px; /* Reduced side padding slightly */
+  padding: 0 40px 24px 40px;
   position: relative;
   display: flex;
   align-items: flex-end;
   gap: 24px;
-  box-sizing: border-box; /* Keeps padding inside the width */
+  box-sizing: border-box;
 }
 
 .avatar-overlap-wrapper {
   width: 120px;
   height: 120px;
   position: absolute;
-  left: 40px; /* Matches the new padding from the info block */
+  left: 40px;
   top: -60px;
 }
 
@@ -277,7 +339,7 @@ const userPosts = computed(() => {
 .name-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .names {
@@ -300,12 +362,17 @@ const userPosts = computed(() => {
   font-family: 'Geist', sans-serif;
 }
 
+.actions-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .btn-edit-profile {
   padding: 8px 20px;
-  background: var(--color-brand, #778732);
   border: none;
   border-radius: 20px;
-  color: white;
   font-size: 14px;
   font-family: 'Outfit', sans-serif;
   font-weight: 600;
@@ -317,15 +384,67 @@ const userPosts = computed(() => {
   opacity: 0.9;
 }
 
+/* --- Rating Widget CSS --- */
+.rating-widget {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #F7F8F6;
+  padding: 4px 10px;
+  border-radius: 20px;
+  border: 1px solid #E4E7E3;
+}
+
+.rating-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #525A52;
+  font-family: 'Outfit', sans-serif;
+}
+
+.stars-container {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.star-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #D1D5DB; /* Unselected gray */
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+
+.star-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.star-btn.is-active {
+  color: #F59E0B; /* Active Gold */
+}
+
+.star-btn:hover {
+  transform: scale(1.15);
+}
+
+.star-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* ------------------------ */
+
 .user-bio {
   margin: 0;
   color: #525A52;
   font-size: 14px;
   font-family: 'Geist', sans-serif;
   line-height: 1.5;
+  max-width: 800px;
 }
 
-/* The wrapper handles the 100% full-screen background and borders */
 .profile-stats-wrapper {
   width: 100%;
   background: #F7F8F6;
@@ -333,7 +452,6 @@ const userPosts = computed(() => {
   border-bottom: 1px solid #E4E7E3;
 }
 
-/* The inner container perfectly aligns with your Avatar and Name */
 .profile-stats-inner {
   width: 100%;
   max-width: 1100px;
@@ -367,7 +485,7 @@ const userPosts = computed(() => {
 
 .profile-tabs {
   width: 100%;
-  max-width: 1100px; /* Matches info block width */
+  max-width: 1100px;
   margin: 0 auto;
   height: 48px;
   padding: 0 40px;
@@ -435,7 +553,7 @@ const userPosts = computed(() => {
   }
 
   .profile-info-block,
-  .profile-stats-row,
+  .profile-stats-inner,
   .profile-tabs {
     padding-left: 24px;
     padding-right: 24px;

@@ -43,10 +43,6 @@ const handleLogin = async () => {
   }
 }
 
-const handleGoogleAuth = () => {
-  console.log('Google Auth Triggered')
-  // For later: supabase.auth.signInWithOAuth({ provider: 'google' })
-}
 </script>
 
 <template>
@@ -165,27 +161,6 @@ const handleGoogleAuth = () => {
             <button type="submit" class="btn-login" :disabled="isSubmitting">
               {{ isSubmitting ? 'Signing in...' : 'Sign In' }}
             </button>
-
-            <span style="align-self: center;">or continue with</span>
-
-          <button
-            type="button"
-            class="btn-social"
-            @click="handleGoogleAuth"
-          >
-            <svg
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#1A1D1A"
-              stroke-width="2"
-            >
-              <circle cx="12" cy="12" r="10"></circle>
-              <path d="M12 8v8M8 12h8"></path>
-            </svg>
-            Google
-          </button>
         </div>
       </form>
 
