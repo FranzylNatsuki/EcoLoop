@@ -7,5 +7,5 @@ const route = useRoute()
 
 <template>
 	<AppHeader v-if="!route.meta.hideHeader" />
-	<RouterView />
+	<RouterView :key="route.fullPath" />
 </template>

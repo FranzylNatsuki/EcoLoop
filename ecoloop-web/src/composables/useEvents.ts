@@ -7,7 +7,6 @@ export interface Author {
   about?: string
 }
 
-// RESTORED TO MATCH UI EXPECTATIONS
 export interface MaterialNeed {
   id?: string
   material: string
@@ -31,6 +30,7 @@ export interface EventStats {
 
 export interface Pledge {
   id: string
+  donor_id?: string
   donor: string
   donor_avatar: string
   quantity: string
@@ -87,26 +87,46 @@ export interface SubmitPledgePayload {
 const events = ref<EventItem[]>([])
 const loading = ref(false)
 
+export function calculateEventProgress(materials: any[]): number {
+  if (!materials || materials.length === 0) return 0
+
+  const totalTarget = materials.reduce((sum, mat) => {
+    const qty = Number(mat.target_quantity ?? mat.target ?? 0)
+    return sum + (isNaN(qty) ? 0 : qty)
+  }, 0)
+
+  const totalCurrent = materials.reduce((sum, mat) => {
+    const qty = Number(mat.current_quantity ?? mat.current ?? 0)
+    return sum + (isNaN(qty) ? 0 : qty)
+  }, 0)
+
+  if (totalTarget <= 0) return 0
+
+  return Math.min(100, Math.round((totalCurrent / totalTarget) * 100))
+}
+
 export function useEvents() {
 
   function parseMaterials(materialsJson: any): any[] {
-      try {
-        const parsed = typeof materialsJson === 'string' ? JSON.parse(materialsJson) : materialsJson
-        return Array.isArray(parsed) ? parsed : []
-      } catch {
-        return []
-      }
+    try {
+      const parsed = typeof materialsJson === 'string' ? JSON.parse(materialsJson) : materialsJson
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
   }
 
   function transformSupabaseToEventItem(row: any): EventItem {
-    // 1. ADAPTER: Translate new DB columns to what the UI expects
-    const rawMaterials = row.event_materials || parseMaterials(row.materials_needed)
+    // FIX 1: Correctly check for empty array before falling back to parseMaterials
+    const hasDbMaterials = Array.isArray(row.event_materials) && row.event_materials.length > 0
+    const rawMaterials = hasDbMaterials ? row.event_materials : parseMaterials(row.materials_needed)
 
-    const materials: MaterialNeed[] = rawMaterials.map((m: any) => ({
+    // FIX 2: Added safety guard (rawMaterials || []) to prevent runtime crash
+    const materials: MaterialNeed[] = (rawMaterials || []).map((m: any) => ({
       id: m.id,
-      material: m.material_name || m.material || m.name || 'Material', // Maps DB to UI
-      target: Number(m.target_quantity || m.target || m.quantity) || 0, // Maps DB to UI
-      current: Number(m.current_quantity || m.current) || 0,            // Maps DB to UI
+      material: m.material_name || m.material || m.name || 'Material',
+      target: Number(m.target_quantity || m.target || m.quantity) || 0,
+      current: Number(m.current_quantity || m.current) || 0,
       unit: m.unit || 'pcs'
     }))
 
@@ -118,9 +138,13 @@ export function useEvents() {
     const diffTime = eventDate.getTime() - Date.now()
     const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
 
-    const authorFullName = row.author?.full_name || 'Community Organizer'
-    const authorAvatar = row.author?.profile_data?.Avatar || 'https://placehold.co/44x44'
-    const authorBio = row.author?.profile_data?.about || ''
+    // FIX 3: Unpack author & profile_data arrays from Supabase query response
+    const rawAuthor = Array.isArray(row.author) ? row.author[0] : row.author
+    const rawProfile = Array.isArray(rawAuthor?.profile_data) ? rawAuthor?.profile_data[0] : rawAuthor?.profile_data
+
+    const authorFullName = rawAuthor?.full_name || 'Community Organizer'
+    const authorAvatar = rawProfile?.Avatar || 'https://placehold.co/44x44'
+    const authorBio = rawProfile?.about || ''
 
     return {
       type: 'event',
@@ -133,7 +157,7 @@ export function useEvents() {
       description: row.description || '',
       category: row.category || 'General',
       image: row.banner_url || '',
-      materials_needed: materials, // Passed exactly as UI expects
+      materials_needed: materials,
       fulfillment_percent: fulfillmentPercent,
       organizer: {
         name: authorFullName,
@@ -149,7 +173,7 @@ export function useEvents() {
     }
   }
 
-  // 2. Fetch Events
+  // Fetch Events
   async function fetchEvents(options?: { category?: string; limit?: number }) {
     loading.value = true
     try {
@@ -186,8 +210,9 @@ export function useEvents() {
     }
   }
 
-  // 3. Fetch Single Event
+  // Fetch Single Event
   async function fetchEventById(id: string): Promise<EventItem | null> {
+    loading.value = true // FIX 4: Explicitly set loading state
     try {
       const { data, error } = await supabase
         .from('events')
@@ -209,8 +234,10 @@ export function useEvents() {
         .from('event_pledge_items')
         .select(`
           id, quantity, unit, material_name, created_at,
-          pledge:event_pledges!inner (
+          pledge:event_pledges!event_pledge_id!inner (
+            id,
             event_id,
+            donor_id,
             donor:profiles!donor_id (
               full_name,
               profile_data:profile_data_fk (Avatar)
@@ -219,42 +246,106 @@ export function useEvents() {
         `)
         .eq('pledge.event_id', id)
         .order('created_at', { ascending: false })
-        .limit(5)
 
       if (pledgeError) console.error("Pledge fetch error:", pledgeError)
 
-      const recentPledges: Pledge[] = (pledgeItemsData || []).map((item: any) => ({
-        id: item.id,
-        donor: item.pledge?.donor?.full_name || 'Anonymous Supporter',
-        donor_avatar: item.pledge?.donor?.profile_data?.Avatar || 'https://placehold.co/38x38',
-        quantity: `${item.quantity || 1} ${item.material_name || item.unit || 'items'}`,
-        time: new Date(item.created_at).toLocaleDateString()
-      }))
+      const allItems = pledgeItemsData || []
 
-      const { data: topDonorsData } = await supabase
-        .from('event_pledge_items')
-        .select(`
-          id, quantity, material_name,
-          pledge:event_pledges!inner (
-            event_id,
-            donor:profiles!donor_id (
-              full_name,
-              profile_data:profile_data_fk (Avatar)
-            )
-          )
-        `)
-        .eq('pledge.event_id', id)
-        .order('quantity', { ascending: false })
-        .limit(5)
+      // --- A. Recent Pledges ---
+      const recentPledges: Pledge[] = allItems.slice(0, 5).map((item: any) => {
+        const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
+        const donor = Array.isArray(pledge?.donor) ? pledge?.donor[0] : pledge?.donor
+        const profile = Array.isArray(donor?.profile_data) ? donor?.profile_data[0] : donor?.profile_data
 
-      const topDonors: Pledge[] = (topDonorsData || []).map((td: any, index: number) => ({
-        id: td.id || String(index),
-        donor: td.pledge?.donor?.full_name || 'Community Supporter',
-        donor_avatar: td.pledge?.donor?.profile_data?.Avatar || 'https://placehold.co/38x38',
-        quantity: `${td.quantity || 1} items pledged`,
-        time: 'Top Contributor'
-      }))
+        return {
+          id: item.id,
+          donor_id: pledge?.donor_id,
+          donor: donor?.full_name || 'Anonymous Supporter',
+          donor_avatar: profile?.Avatar || 'https://placehold.co/38x38',
+          quantity: `${item.quantity || 1} ${item.material_name || item.unit || 'items'}`,
+          time: new Date(item.created_at).toLocaleDateString()
+        }
+      })
 
+      // --- B. Unique Contributors Count ---
+      const uniqueDonorKeys = new Set(
+        allItems
+          .map((item: any) => {
+            const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
+            const donor = Array.isArray(pledge?.donor) ? pledge?.donor[0] : pledge?.donor
+            return pledge?.donor_id || donor?.full_name
+          })
+          .filter(Boolean)
+      )
+      const uniqueContributorsCount = uniqueDonorKeys.size
+
+      // --- C. Top Donors ---
+      const donorMap = new Map<string, {
+        id: string
+        donor: string
+        donor_avatar: string
+        totalQuantity: number
+      }>()
+
+      for (const item of allItems) {
+        const itemAny = item as any
+        const pledge = Array.isArray(itemAny.pledge) ? itemAny.pledge[0] : itemAny.pledge
+        const donor = Array.isArray(pledge?.donor) ? pledge?.donor[0] : pledge?.donor
+        const profile = Array.isArray(donor?.profile_data) ? donor?.profile_data[0] : donor?.profile_data
+
+        const donorKey = pledge?.donor_id || donor?.full_name || 'anonymous'
+        const donorName = donor?.full_name || 'Community Supporter'
+        const avatar = profile?.Avatar || 'https://placehold.co/38x38'
+
+        const rawQty = itemAny.quantity
+        const parsedQty = typeof rawQty === 'number' ? rawQty : parseInt(String(rawQty || 0), 10)
+        const qty = isNaN(parsedQty) ? 0 : parsedQty
+
+        if (!donorMap.has(donorKey)) {
+          donorMap.set(donorKey, {
+            id: String(donorKey),
+            donor: donorName,
+            donor_avatar: avatar,
+            totalQuantity: qty
+          })
+        } else {
+          donorMap.get(donorKey)!.totalQuantity += qty
+        }
+      }
+
+      const topDonors: Pledge[] = Array.from(donorMap.values())
+        .sort((a, b) => b.totalQuantity - a.totalQuantity)
+        .slice(0, 5)
+        .map((td) => ({
+          id: td.id,
+          donor: td.donor,
+          donor_avatar: td.donor_avatar,
+          quantity: `${td.totalQuantity} items pledged`,
+          time: 'Top Contributor'
+        }))
+
+      // --- D. Calculate Material Totals ---
+      const materialPledgedMap = new Map<string, number>()
+      for (const item of allItems) {
+        const matName = (item.material_name || '').trim().toLowerCase()
+        if (matName) {
+          const currentTotal = materialPledgedMap.get(matName) || 0
+          materialPledgedMap.set(matName, currentTotal + (Number(item.quantity) || 0))
+        }
+      }
+
+      if (data.event_materials && Array.isArray(data.event_materials)) {
+        data.event_materials = data.event_materials.map((mat: any) => {
+          const matNameKey = (mat.material_name || '').trim().toLowerCase()
+          const pledgedQty = materialPledgedMap.get(matNameKey)
+          return {
+            ...mat,
+            current_quantity: pledgedQty !== undefined ? pledgedQty : (mat.current_quantity || 0)
+          }
+        })
+      }
+
+      // --- E. Fetch Related Events ---
       const { data: relatedData } = await supabase
         .from('events')
         .select(`
@@ -265,16 +356,15 @@ export function useEvents() {
         .limit(3)
 
       const relatedEvents: RelatedEvent[] = (relatedData || []).map((rel: any) => {
-        const relMaterials = rel.event_materials || parseMaterials(rel.materials_needed)
-        const relTarget = relMaterials.reduce((acc: number, m: any) => acc + (m.target_quantity || m.target || 0), 0)
-        const relCurrent = relMaterials.reduce((acc: number, m: any) => acc + (m.current_quantity || m.current || 0), 0)
+        const mats = rel.event_materials || []
+        const progressPercent = calculateEventProgress(mats)
 
         return {
           id: rel.id,
           title: rel.title || 'Untitled Event',
           category: rel.category || 'Community',
           image: rel.banner_url || 'https://placehold.co/600x360',
-          fulfillment_percent: relTarget > 0 ? Math.min(100, Math.round((relCurrent / relTarget) * 100)) : 0
+          fulfillment_percent: progressPercent
         }
       })
 
@@ -288,17 +378,19 @@ export function useEvents() {
         related_events: relatedEvents,
         stats: {
           days_left: eventItem.stats.days_left,
-          total_donors: (pledgeItemsData || []).length,
+          total_donors: uniqueContributorsCount,
           total_pledged: totalPledgedSum
         }
       }
     } catch (err: any) {
       console.error('Error fetching event details:', err.message || err)
       return null
+    } finally {
+      loading.value = false // FIX 4: Always reset loading state
     }
   }
 
-  // 4. Create Event
+  // Create Event
   async function createEvent(newEventData: CreateEventPayload) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -324,11 +416,10 @@ export function useEvents() {
       if (eventError) throw eventError
 
       if (newEventData.materials_needed && newEventData.materials_needed.length > 0) {
-        // ADAPTER: Translate the UI's 'material' back into the DB's 'material_name'
         const materialInserts = newEventData.materials_needed.map(m => ({
           event_id: eventData.id,
-          material_name: m.material, // Matches UI
-          target_quantity: m.target, // Matches UI
+          material_name: m.material,
+          target_quantity: m.target,
           current_quantity: 0,
           unit: m.unit
         }))
@@ -348,7 +439,7 @@ export function useEvents() {
     }
   }
 
-  // 5. Submit Pledge
+  // Submit Pledge
   async function submitPledge(payload: SubmitPledgePayload) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
