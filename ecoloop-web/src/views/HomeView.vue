@@ -32,7 +32,6 @@ function openEvent(id: string | number) {
   router.push(`/events/${id}`)
 }
 
-const currentUserAvatar = 'https://placehold.co/38x38'
 </script>
 
 <template>

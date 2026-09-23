@@ -103,7 +103,7 @@ async function fetchPostLocation() {
   if (!props.postId) return
 
   try {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('cause_requests')
       .select('latitude, longitude, location_address')
       .eq('id', props.postId)

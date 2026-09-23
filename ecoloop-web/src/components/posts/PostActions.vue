@@ -1,23 +1,25 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { MessageCircle, Share2, Bookmark } from 'lucide-vue-next'
+import { MessageCircle, Share2, Bookmark, Heart } from 'lucide-vue-next'
 import DonateMaterialsModal from '../Modals/DonateMaterialsModal.vue'
 import EditPostModal from '../Modals/EditPostModal.vue'
 import ThankYouDonationModal from '../Modals/ThankYouDonationModal.vue'
 import { supabase } from '../../composables/useAuth'
 
 function handlePostUpdated() {
-  window.location.reload() // Quickest way to see changes!
+  window.location.reload()
 }
 
 const props = defineProps<{
   comments: number
+  votes: number // <-- Added for Likes
   postId?: string | number
   hideComments?: boolean
   projectName?: string
   authorUsername?: string
   isOwner?: boolean
+  isCompleted?: boolean // <-- Added for Completion State
 }>()
 
 defineEmits<{ share: []; save: []; donate: []; map: [] }>()
@@ -28,6 +30,11 @@ const router = useRouter()
 const showDonateModal = ref(false)
 const showThankYouModal = ref(false)
 const showEditModal = ref(false)
+
+// Like State
+const localVotes = ref(props.votes || 0)
+const hasLiked = ref(false)
+const isLiking = ref(false)
 
 // Donation Summary State
 const donationSummary = ref({
@@ -41,8 +48,9 @@ function openPost() {
   }
 }
 
-// SAFEGUARD: Don't open the modal if the post is from mock data
 function handleDonateClick() {
+  if (props.isCompleted) return // Block if completed
+
   if (!props.postId || String(props.postId).length < 20) {
     alert("Cannot donate to this post: It's using mock data without a real Database UUID.")
     return
@@ -50,9 +58,7 @@ function handleDonateClick() {
   showDonateModal.value = true
 }
 
-// Called when DonateMaterialsModal emits 'submitted'
 function handleDonationSubmitted(payload: { pledgeId: string; quantity: number; materialName: string }) {
-  console.log('Pledge created successfully with ID:', payload.pledgeId)
   donationSummary.value = {
     quantity: payload.quantity,
     materialName: payload.materialName
@@ -71,79 +77,123 @@ function handleBackToPost() {
   }
 }
 
-// Add refs to hold the fetched data
+// Like Toggle Logic
+async function toggleLike() {
+  if (!props.postId || isLiking.value) return
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) {
+    alert('Please log in to like posts.')
+    return
+  }
+
+  isLiking.value = true
+  const userId = session.user.id
+
+  try {
+    if (hasLiked.value) {
+      // Unlike
+      await supabase.from('post_likes').delete().eq('post_id', props.postId).eq('user_id', userId)
+      localVotes.value--
+      hasLiked.value = false
+    } else {
+      // Like
+      await supabase.from('post_likes').insert({ post_id: props.postId, user_id: userId })
+      localVotes.value++
+      hasLiked.value = true
+    }
+  } catch (err) {
+    console.error('Error toggling like:', err)
+  } finally {
+    isLiking.value = false
+  }
+}
+
+// Fetch Author Details and Initial Like State
 const fetchedProjectName = ref(props.projectName || '')
 const fetchedAuthorName = ref(props.authorUsername || '')
 
 onMounted(async () => {
-  // If we already have them from props, skip the query
-  if (fetchedProjectName.value && fetchedAuthorName.value) return
   if (!props.postId) return
 
-  // 1. Removed the complex alias, just requesting 'profiles'
-  const { data, error } = await supabase
-    .from('cause_requests')
-    .select(`
-      title,
-      profiles (
-        full_name
-      )
-    `)
-    .eq('id', props.postId)
-    .single()
+  const { data: { session } } = await supabase.auth.getSession()
 
-  if (!error && data) {
-    // 2. Cast data as 'any' to bypass TypeScript's strict type checking
-    const postData = data as any
+  // 1. Check if the user has already liked this post
+  if (session?.user?.id) {
+    const { data: likeData } = await supabase
+      .from('post_likes')
+      .select('user_id')
+      .eq('post_id', props.postId)
+      .eq('user_id', session.user.id)
+      .single()
 
-    fetchedProjectName.value = postData.title
+    if (likeData) hasLiked.value = true
+  }
 
-    // 3. Profiles comes back as an object (or array depending on PostgREST version),
-    // so we safely check for full_name
-    let authorName = 'Unknown User'
-    if (postData.profiles) {
-      // If it returned an array for some reason, grab the first item, otherwise grab the object
-      const profileInfo = Array.isArray(postData.profiles) ? postData.profiles[0] : postData.profiles
-      authorName = profileInfo?.full_name || 'Unknown User'
+  // 2. Fetch Author if missing
+  if (!fetchedProjectName.value || !fetchedAuthorName.value) {
+    const { data, error } = await supabase
+      .from('cause_requests')
+      .select(`title, profiles(full_name)`)
+      .eq('id', props.postId)
+      .single()
+
+    if (!error && data) {
+      const postData = data as any
+      fetchedProjectName.value = postData.title
+
+      let authorName = 'Unknown User'
+      if (postData.profiles) {
+        const profileInfo = Array.isArray(postData.profiles) ? postData.profiles[0] : postData.profiles
+        authorName = profileInfo?.full_name || 'Unknown User'
+      }
+      fetchedAuthorName.value = authorName
     }
-
-    fetchedAuthorName.value = authorName
-  } else if (error) {
-    console.error('Error fetching author details:', error.message)
   }
 })
-
 </script>
 
 <template>
   <div class="post-footer">
     <div class="actions-left">
+      <!-- New Like Button -->
+      <button class="footer-action" :class="{ 'is-liked': hasLiked }" @click.stop="toggleLike">
+        <Heart :size="14" :fill="hasLiked ? 'currentColor' : 'none'" />
+        <span>{{ localVotes }} Likes</span>
+      </button>
+
       <button v-if="!hideComments" class="footer-action" @click="openPost">
         <MessageCircle :size="14" />
         <span>{{ comments }} Comments</span>
       </button>
 
-      <button class="footer-action" @click="$emit('share')">
+      <button class="footer-action" @click.stop="$emit('share')">
         <Share2 :size="14" />
         <span>Share</span>
       </button>
 
-      <button class="footer-action" @click="$emit('save')">
+      <button class="footer-action" @click.stop="$emit('save')">
         <Bookmark :size="14" />
         <span>Save</span>
       </button>
     </div>
 
-    <!-- HIDE button if the user is the owner -->
-    <button v-if="!isOwner" class="btn-donate" @click="handleDonateClick">
-      Donate
+    <!-- Disabled State Check added here -->
+    <button
+      v-if="!isOwner"
+      class="btn-donate"
+      :class="{ 'btn-completed': isCompleted }"
+      :disabled="isCompleted"
+      @click.stop="handleDonateClick"
+    >
+      {{ isCompleted ? 'Goal Reached' : 'Donate' }}
     </button>
 
-    <button v-if="isOwner" class="btn-manage" @click="showEditModal = true">
+    <button v-if="isOwner" class="btn-manage" @click.stop="showEditModal = true">
       Edit Post
     </button>
 
-    <!-- Step 1: Donation Form Modal -->
+    <!-- Modals -->
     <DonateMaterialsModal
       v-model="showDonateModal"
       :post-id="String(postId ?? '')"
@@ -156,13 +206,12 @@ onMounted(async () => {
       @updated="handlePostUpdated"
     />
 
-    <!-- Step 2: Thank You Confirmation Modal -->
     <ThankYouDonationModal
       v-model="showThankYouModal"
       :quantity="donationSummary.quantity"
       :material-name="donationSummary.materialName"
-      :project-name="props.projectName"
-      :author-username="props.authorUsername"
+      :project-name="fetchedProjectName"
+      :author-username="fetchedAuthorName"
       @view-donations="handleViewDonations"
       @back-to-post="handleBackToPost"
     />
@@ -170,9 +219,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* ==========================================================================
-   POST FOOTER CONTAINER
-   ========================================================================== */
 .post-footer {
   display: flex;
   align-items: center;
@@ -185,9 +231,6 @@ onMounted(async () => {
   box-sizing: border-box;
 }
 
-/* ==========================================================================
-   LEFT ACTIONS GROUP
-   ========================================================================== */
 .actions-left {
   display: flex;
   align-items: center;
@@ -208,7 +251,7 @@ onMounted(async () => {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .footer-action:hover {
@@ -216,9 +259,16 @@ onMounted(async () => {
   color: #1a1d1a;
 }
 
-/* ==========================================================================
-   DONATE BUTTON
-   ========================================================================== */
+/* Liked State CSS */
+.footer-action.is-liked {
+  color: #ef4444; /* Red color for likes */
+  background: #fef2f2;
+}
+
+.footer-action.is-liked:hover {
+  background: #fee2e2;
+}
+
 .btn-donate {
   height: 32px;
   padding: 0 50px;
@@ -238,10 +288,17 @@ onMounted(async () => {
   transition: background-color 0.2s ease;
 }
 
-.btn-donate:hover {
+.btn-donate:hover:not(:disabled) {
   background: #4f5b1d;
 }
-/* Add this right below your .btn-donate CSS */
+
+/* Completed Disabled State CSS */
+.btn-completed {
+  background: #e4e7e3;
+  color: #8f9a8f;
+  cursor: not-allowed;
+}
+
 .btn-manage {
   height: 32px;
   padding: 0 45px;

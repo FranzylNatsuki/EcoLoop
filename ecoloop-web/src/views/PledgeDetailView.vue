@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../composables/useAuth'
 import L from 'leaflet'
@@ -26,6 +26,11 @@ const isUpdating = ref(false)
 const errorMessage = ref<string | null>(null)
 const currentUserId = ref<string | null>(null)
 
+// --- Rating State ---
+const myRating = ref(0)
+const hoverRating = ref(0)
+const isSubmittingRating = ref(false)
+
 // --- Inline Confirmation Modal State ---
 const confirmDialog = ref({
   isOpen: false,
@@ -41,6 +46,10 @@ const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: L.Map | null = null
 const isMapExpanded = ref(false)
 
+const isPostAuthor = computed(() => {
+  return currentUserId.value && pledge.value?.post?.author_id === currentUserId.value
+})
+
 const fetchPledgeDetails = async (id: string) => {
   if (!id) return
   isLoading.value = true
@@ -54,7 +63,7 @@ const fetchPledgeDetails = async (id: string) => {
       .from('pledges')
       .select(`
         *,
-        donor:profiles!pledges_donor_id_fkey(full_name, email),
+        donor:profiles!pledges_donor_id_fkey(full_name, email, contact_number),
         post:cause_requests!pledges_post_id_fkey(title, author_id),
         items:pledge_items(*),
         images:pledge_images(image_url)
@@ -65,6 +74,25 @@ const fetchPledgeDetails = async (id: string) => {
     if (error) throw error
     pledge.value = data
 
+    // --- Fetch existing rating if applicable ---
+    const rateeId = isPostAuthor.value
+      ? pledge.value.donor_id
+      : (currentUserId.value === pledge.value.donor_id ? pledge.value.post?.author_id : null)
+
+    if (rateeId && currentUserId.value) {
+      const { data: ratingData } = await supabase
+        .from('user_ratings')
+        .select('score')
+        .eq('rater_id', currentUserId.value)
+        .eq('ratee_id', rateeId)
+        .maybeSingle() // Prevents the 406 error if it doesn't exist yet!
+
+      if (ratingData) {
+        myRating.value = ratingData.score
+      }
+    }
+
+    // --- Initialize Map ---
     if (pledge.value.latitude && pledge.value.longitude) {
       setTimeout(() => {
         initMap(pledge.value.latitude, pledge.value.longitude)
@@ -81,9 +109,36 @@ onMounted(() => {
   fetchPledgeDetails(route.params.id as string)
 })
 
-const isPostAuthor = computed(() => {
-  return currentUserId.value && pledge.value?.post?.author_id === currentUserId.value
-})
+// --- Submit Rating Logic ---
+async function submitRating(score: number) {
+  const rateeId = isPostAuthor.value
+    ? pledge.value?.donor_id
+    : (currentUserId.value === pledge.value?.donor_id ? pledge.value?.post?.author_id : null)
+
+  if (!currentUserId.value || isSubmittingRating.value || !rateeId) return
+
+  isSubmittingRating.value = true
+  myRating.value = score
+
+  try {
+    const { error } = await supabase
+      .from('user_ratings')
+      .upsert({
+        rater_id: currentUserId.value,
+        ratee_id: rateeId,
+        score: score
+      }, {
+        onConflict: 'rater_id, ratee_id'
+      })
+
+    if (error) throw error
+  } catch (err: any) {
+    console.error("Failed to submit rating:", err.message)
+    alert("Could not save rating.")
+  } finally {
+    isSubmittingRating.value = false
+  }
+}
 
 // --- Formatter for Pickup Preference ---
 const getPreferenceLabel = (pref: string) => {
@@ -224,8 +279,21 @@ watch(
           <div class="card">
             <h3>Donor Information</h3>
             <p><strong>Name:</strong> {{ pledge.donor?.full_name || 'Anonymous' }}</p>
-            <p v-if="pledge.donor?.email"><strong>Email:</strong> <a :href="`mailto:${pledge.donor.email}`">{{ pledge.donor.email }}</a></p>
             <p v-if="pledge.description"><strong>Note:</strong> {{ pledge.description }}</p>
+
+            <div v-if="pledge.donor?.email || pledge.donor?.contact_number" class="contact-section">
+              <h4 class="contact-heading">Contact the Donor:</h4>
+              <div class="contact-links">
+                <p v-if="pledge.donor?.email">
+                  <strong>Email:</strong>
+                  <a :href="`mailto:${pledge.donor.email}`">{{ pledge.donor.email }}</a>
+                </p>
+                <p v-if="pledge.donor?.contact_number">
+                  <strong>Phone:</strong>
+                  <a :href="`tel:${pledge.donor.contact_number}`">{{ pledge.donor.contact_number }}</a>
+                </p>
+              </div>
+            </div>
           </div>
 
           <div class="card">
@@ -254,6 +322,30 @@ watch(
               </div>
             </div>
           </div>
+
+          <!-- NEW: Rating Card (Visible only when pledge is completed) -->
+          <div v-if="pledge.status === 'completed' && (isPostAuthor || currentUserId === pledge.donor_id)" class="card rating-card">
+            <h3>{{ isPostAuthor ? 'Rate this Donor' : 'Rate the Organizer' }}</h3>
+            <p class="rating-desc">Help keep the community safe and trustworthy by rating your experience.</p>
+
+            <div class="stars-container" @mouseleave="hoverRating = 0">
+              <button
+                v-for="star in 5"
+                :key="star"
+                class="star-btn"
+                :class="{ 'is-active': star <= (hoverRating || myRating) }"
+                :disabled="isSubmittingRating"
+                @mouseover="hoverRating = star"
+                @click="submitRating(star)"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+              </button>
+            </div>
+            <span class="rating-status-text" v-if="myRating > 0">Your rating is saved!</span>
+          </div>
+
         </div>
 
         <div class="sidebar-column">
@@ -261,7 +353,6 @@ watch(
             <h3>Logistics</h3>
             <div class="logistics-detail">
               <span class="label">Preference:</span>
-              <!-- Use helper function to display friendly label -->
               <span class="value preference-badge">{{ getPreferenceLabel(pledge.pickup_preference) }}</span>
             </div>
 
@@ -287,7 +378,7 @@ watch(
         </div>
       </div>
 
-      <!-- Action Buttons Moved to Bottom Right -->
+      <!-- Action Buttons -->
       <div v-if="isPostAuthor" class="bottom-actions-container">
         <template v-if="pledge.status === 'pending'">
           <button class="btn-action pill-reject" :disabled="isUpdating" @click="requestStatusUpdate('cancelled')">
@@ -394,6 +485,41 @@ watch(
   color: #1A1D1A;
 }
 
+/* --- Contact Section Styles --- */
+.contact-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed #eaeaea;
+  background: #fdfdfd;
+}
+.contact-heading {
+  font-size: 0.95rem;
+  color: #1A1D1A;
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+}
+.contact-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.contact-links p {
+  margin: 0;
+}
+.contact-links a {
+  color: #778732;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+.contact-links a:hover {
+  text-decoration: underline;
+  color: #556123;
+}
+/* --------------------------------- */
+
 .items-table {
   width: 100%;
   border-collapse: collapse;
@@ -426,6 +552,54 @@ watch(
   object-fit: cover;
   display: block;
 }
+
+/* --- Rating Card Styles --- */
+.rating-card {
+  text-align: center;
+  background: #fdfdfd;
+  border: 1px dashed #e4e7e3;
+}
+.rating-desc {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+.stars-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.star-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #e4e7e3;
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+.star-btn svg {
+  width: 32px;
+  height: 32px;
+}
+.star-btn.is-active {
+  color: #F59E0B;
+}
+.star-btn:hover:not(:disabled) {
+  transform: scale(1.15);
+}
+.star-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rating-status-text {
+  display: block;
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: #778732;
+  font-weight: 600;
+}
+/* -------------------------- */
+
 
 .logistics-detail {
   margin-bottom: 16px;
@@ -494,8 +668,8 @@ watch(
 .static-map {
   width: 100%;
   height: 100%;
-  min-height: 200px; /* Fixes white map issue */
-  z-index: 1; /* Keeps Leaflet behind modals */
+  min-height: 200px;
+  z-index: 1;
 }
 
 /* --- BOTTOM RIGHT PILL ACTIONS --- */

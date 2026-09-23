@@ -30,6 +30,7 @@ const emit = defineEmits<{
 const selectedCategory = ref('Gardening')
 const title = ref('')
 const description = ref('')
+const isCompleted = ref(false) // <-- NEW: Track completion status
 const isSubmitting = ref(false)
 const isFetching = ref(false)
 
@@ -64,8 +65,8 @@ async function fetchPostData() {
   try {
     const { data, error } = await supabase
       .from('cause_requests')
-      // NEW: Included latitude, longitude, and location_address
-      .select('title, body, category, latitude, longitude, location_address, post_images(id, image_url)')
+      // NEW: Added is_completed to the select query
+      .select('title, body, category, latitude, longitude, location_address, is_completed, post_images(id, image_url)')
       .eq('id', props.postId)
       .single()
 
@@ -75,6 +76,7 @@ async function fetchPostData() {
       title.value = data.title
       description.value = data.body
       selectedCategory.value = data.category || 'Gardening'
+      isCompleted.value = data.is_completed || false // NEW: Populate status
 
       // Map Data
       latitude.value = data.latitude
@@ -183,9 +185,10 @@ async function handleSubmit() {
         title: title.value,
         body: description.value,
         category: selectedCategory.value,
-        latitude: latitude.value, // NEW
-        longitude: longitude.value, // NEW
-        location_address: locationAddress.value // NEW
+        latitude: latitude.value,
+        longitude: longitude.value,
+        location_address: locationAddress.value,
+        is_completed: isCompleted.value // NEW: Save completion status
       })
       .eq('id', props.postId)
 
@@ -303,6 +306,20 @@ onUnmounted(() => {
 
               <!-- LEFT COLUMN: Post Info -->
               <div class="form-left">
+                <!-- NEW: Status Toggle Switch -->
+                <div class="form-group">
+                  <label class="field-label">Project Status</label>
+                  <label class="status-toggle">
+                    <input type="checkbox" v-model="isCompleted" class="sr-only" />
+                    <div class="toggle-track" :class="{ 'is-active': isCompleted }">
+                      <div class="toggle-thumb"></div>
+                    </div>
+                    <span class="status-text" :class="{ 'text-completed': isCompleted }">
+                      {{ isCompleted ? 'Completed (Goal Reached)' : 'Active (Accepting Donations)' }}
+                    </span>
+                  </label>
+                </div>
+
                 <div class="form-group">
                   <label for="post-category">Category</label>
                   <div class="select-wrapper">
@@ -506,6 +523,62 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* NEW: Status Toggle Styles */
+.status-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
+.toggle-track {
+  width: 44px;
+  height: 24px;
+  background: #e4e7e3;
+  border-radius: 12px;
+  position: relative;
+  transition: background 0.3s ease;
+}
+.toggle-track.is-active {
+  background: #778732;
+}
+.toggle-thumb {
+  width: 20px;
+  height: 20px;
+  background: #ffffff;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.toggle-track.is-active .toggle-thumb {
+  transform: translateX(20px);
+}
+.status-text {
+  font-family: 'Geist', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #525a52;
+  transition: color 0.3s ease;
+}
+.status-text.text-completed {
+  color: #778732;
+  font-weight: 600;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  border: 0;
 }
 
 .form-group {

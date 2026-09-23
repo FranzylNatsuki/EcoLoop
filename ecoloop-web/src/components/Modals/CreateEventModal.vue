@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { Calendar, X, ChevronDown, Camera, MapPin, ChevronRight } from 'lucide-vue-next'
+import { Calendar, X, ChevronDown, Camera, ChevronRight } from 'lucide-vue-next'
 import RequestMaterialsModal from './RequestMaterialsModal.vue'
 
 import L from 'leaflet'

@@ -205,6 +205,7 @@ const handleRegister = async () => {
 
 <template>
   <div class="registration-page">
+      <!--
     <div class="bg-illustration left">
       <img
         class="illustration-img"
@@ -232,7 +233,7 @@ const handleRegister = async () => {
         </p>
       </div>
     </div>
-
+    -->
     <div class="registration-card">
       <div class="card-header">
         <div class="brand-logo-icon">

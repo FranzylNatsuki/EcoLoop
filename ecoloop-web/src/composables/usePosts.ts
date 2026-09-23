@@ -35,12 +35,10 @@ export interface Post {
   comment_count: number
   status: string
   created_at: string
+  is_completed: boolean
   author: Author
   author_id: string
   post_images?: PostImage[]
-
-  // NOTE: If you want to keep these, you need to add them as JSONB
-  // columns to your cause_requests table in Supabase!
   eventDetails?: EventDetails
   materials?: MaterialItem[]
 }
@@ -76,12 +74,13 @@ export function usePosts() {
 
         // Flatten the nested Avatar data so it matches the Post interface
         posts.value = data.map((post: any) => ({
-          ...post,
-          author: {
-            full_name: post.author.full_name,
-            Avatar: post.author.profile_data?.Avatar || 'https://placehold.co/38x38'
-          }
-        })) as Post[]
+                  ...post,
+                  is_completed: post.is_completed || false, // <-- 2. ADD THIS FALLBACK
+                  author: {
+                    full_name: post.author?.full_name || 'Unknown User',
+                    Avatar: post.author?.profile_data?.Avatar || 'https://placehold.co/38x38'
+                  }
+                })) as Post[]
       } catch (err) {
         console.error('Error fetching posts from Supabase:', err)
       }

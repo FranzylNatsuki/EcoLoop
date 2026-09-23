@@ -76,7 +76,7 @@ async function handlePublish(payload: unknown) {
       const file = payload.event.rawFile
       const filePath = `event-banners/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('images')
         .upload(filePath, file)
 
