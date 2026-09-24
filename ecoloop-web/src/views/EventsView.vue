@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useEvents } from '../composables/useEvents'
 import type { EventItem } from '../types/event'
 
+import CategoryBar from '../components/layout/CategoryBar.vue'
 import PageLayout from '../components/layout/PageLayout.vue'
 import EventHero from '../components/events/EventHero.vue'
 import EventStats from '../components/events/EventStats.vue'
@@ -25,6 +26,28 @@ const event = ref<EventItem | null>(null)
 // Modal State Controls
 const isDonateModalOpen = ref(false)
 const isThankYouModalOpen = ref(false)
+
+// Category Selection State
+const selectedCategory = ref('All')
+
+// Filtered Events Computed List
+const filteredEvents = computed(() => {
+  // Read category directly from URL query parameter
+  const selected = (route.query.category as string || '').trim().toLowerCase()
+
+  // Return all if no query param or set to 'all'
+  if (!selected || selected === 'all' || selected === 'all categories') {
+    return events.value
+  }
+
+  return events.value.filter((e) => {
+    const eventCat = e.category?.trim().toLowerCase() || ''
+    if (!eventCat) return false
+
+    // Flexible match (e.g. "tree planting" matches "Tree Planting")
+    return eventCat.includes(selected) || selected.includes(eventCat)
+  })
+})
 
 // Payload details for Thank You screen
 const thankYouDetails = ref({
@@ -84,7 +107,7 @@ watch(
 </script>
 
 <template>
-  <!-- 1. SINGLE EVENT DETAIL VIEW (/events/:id) - Full Width Layout -->
+  <!-- 1. SINGLE EVENT DETAIL VIEW (/events/:id) -->
   <div v-if="route.params.id" class="event-page-wrapper">
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
@@ -148,35 +171,65 @@ watch(
     </div>
   </div>
 
-  <!-- 2. ALL EVENTS LIST VIEW (/events) - Feed Layout -->
-  <PageLayout v-else>
-    <template #main>
-      <div class="events-list-page">
-        <h2>Community Events</h2>
-        <div v-if="events.length === 0" class="not-found-state">
-          <p>No events found.</p>
+  <!-- 2. ALL EVENTS LIST VIEW (/events) - Exactly matching HomeView structure -->
+  <template v-else>
+  <CategoryBar/>
+    <PageLayout>
+      <template #main>
+        <div class="events-list-page">
+          <h2>Community Events</h2>
+
+          <div v-if="filteredEvents.length === 0" class="not-found-state">
+            <p>No events found for this category.</p>
+          </div>
+
+          <div v-else class="events-grid">
+            <EventPreview
+              v-for="item in filteredEvents"
+              :key="item.id"
+              :id="item.id"
+              :image="item.image"
+              :title="item.event_title"
+              :category="item.category"
+              :date="item.schedule"
+              :description="item.description"
+              :location="item.location"
+              :funded-percentage="item.fulfillment_percent"
+              @click="openEventDetail(item.id)"
+            />
+          </div>
         </div>
-        <div v-else class="events-grid">
-          <EventPreview
-            v-for="item in events"
-            :key="item.id"
-            :id="item.id"
-            :image="item.image"
-            :title="item.event_title"
-            :category="item.category"
-            :date="item.schedule"
-            :description="item.description"
-            :location="item.location"
-            :funded-percentage="item.fulfillment_percent"
-            @click="openEventDetail(item.id)"
-          />
-        </div>
-      </div>
-    </template>
-  </PageLayout>
+      </template>
+    </PageLayout>
+  </template>
 </template>
 
 <style scoped>
+/* --- ALL EVENTS FEED STYLES --- */
+.events-list-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+}
+
+.events-list-page h2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1d1a;
+  margin: 0;
+}
+
+/* Formats event cards as a responsive grid across the main feed area */
+.events-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+  width: 100%;
+}
+
+/* --- SINGLE EVENT DETAIL VIEW STYLES --- */
 .event-page-wrapper {
   max-width: 1200px;
   margin: 0 auto;
@@ -191,6 +244,7 @@ watch(
   border: 1px solid #e2e8f0;
   overflow: hidden;
 }
+
 .organizer-info {
   display: flex;
   align-items: center;
@@ -209,6 +263,7 @@ watch(
   object-fit: cover !important;
   flex-shrink: 0 !important;
 }
+
 .event-details-container {
   display: flex;
   flex-direction: column;

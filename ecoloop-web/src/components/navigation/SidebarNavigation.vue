@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute, useRouter } from 'vue-router'
-import { Flame, Clock, ArrowUp, TrendingUp, Calendar, ShoppingBag } from 'lucide-vue-next'
+import { Flame, Clock, Layers, MapPin, Megaphone, Calendar, ShoppingBag } from 'lucide-vue-next'
 import { useSort } from '../../composables/useSort'
 
 const route = useRoute()
@@ -10,11 +10,12 @@ const { selectedSort, setSort } = useSort()
 const sortItems = [
   { label: 'Hot', icon: Flame },
   { label: 'New', icon: Clock },
-  { label: 'Top', icon: ArrowUp },
-  { label: 'Rising', icon: TrendingUp },
+  { label: 'Nearest', icon: MapPin },
 ]
 
 const pageItems = [
+  { label: 'All posts', icon: Layers, to: '/home' },
+  { label: 'Cause Requests', icon: Megaphone, to: '/home?category=cause'},
   { label: 'Events', icon: Calendar, to: '/events' },
   { label: 'Marketplace', icon: ShoppingBag, to: '/marketplace' },
 ]

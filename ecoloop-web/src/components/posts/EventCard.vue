@@ -243,7 +243,7 @@ function handleImageError(event: Event) {
 }
 
 .image-wrapper {
-  height: 200px;
+  height: 360px;
   border-radius: 6px;
   overflow: hidden;
 }

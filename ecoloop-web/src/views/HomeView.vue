@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import PageLayout from '../components/layout/PageLayout.vue'
 import CategoryBar from '../components/layout/CategoryBar.vue'
 import PostCard from '../components/posts/PostCard.vue'
@@ -12,6 +12,7 @@ import { useSort } from '../composables/useSort'
 import { usePosts } from '../composables/usePosts'
 import { useEvents } from '../composables/useEvents'
 
+const route = useRoute()
 const router = useRouter()
 const { posts } = usePosts()
 const { events, fetchEvents } = useEvents()
@@ -20,11 +21,35 @@ onMounted(() => {
   fetchEvents()
 })
 
-const feed = computed(() => {
-  const combined = [
-    ...posts.value.map((p) => ({ kind: 'post' as const, item: p })),
-    ...events.value.map((e) => ({ kind: 'event' as const, item: e })),
-  ]
+  const feed = computed(() => {
+    let combined = [
+      ...posts.value.map((p) => ({ kind: 'post' as const, item: p })),
+      ...events.value.map((e) => ({ kind: 'event' as const, item: e })),
+    ]
+    const activeCategory = (route.query.category as string || '').toLowerCase()
+
+    if (activeCategory) {
+      combined = combined.filter((entry) => {
+      const item = entry.item as any
+
+      // IF USER CLICKED "Cause Requests" IN SIDEBAR (/home?category=cause)
+      if (activeCategory === 'cause' || activeCategory === 'cause_request') {
+        return (
+          entry.kind === 'post' &&
+          (
+            item.post_type?.toLowerCase().includes('cause') ||
+            item.type?.toLowerCase().includes('cause') ||
+            item.is_cause === true ||
+            true
+          )
+        )
+      }
+
+      // FOR TOP CATEGORY PILLS
+      const itemCat = (item.category || item.event_category || '').toLowerCase()
+      return itemCat === activeCategory
+    })
+  }
 
   if (selectedSort.value === 'New') {
     return combined.sort((a, b) => {
@@ -34,11 +59,19 @@ const feed = computed(() => {
     })
   }
 
-  if (selectedSort.value === 'Top' || selectedSort.value === 'Hot') {
+  if (selectedSort.value === 'Hot') {
     return combined.sort((a, b) =>
       ((b.item as any).likes_count || (b.item as any).upvotes || 0) -
       ((a.item as any).likes_count || (a.item as any).upvotes || 0)
     )
+  }
+
+  if (selectedSort.value === 'Nearest') {
+    return combined.sort((a, b) => {
+      const distA = Number((a.item as any).distance) || Infinity
+      const distB = Number((b.item as any).distance) || Infinity
+      return distA - distB
+    })
   }
 
   return combined
@@ -51,24 +84,12 @@ function openEvent(id: string | number) {
 }
 
 function calculateProgress(eventItem: any): number {
-  const materials = eventItem.materials_needed || eventItem.event_materials || []
-  if (!materials || materials.length === 0) {
-    return eventItem.fulfillment_percent ?? 0
-  }
+  const goal = Number(eventItem.target_items || 0)
+  const donated = Number(eventItem.donated_items || 0)
 
-  const totalTarget = materials.reduce((sum: number, m: any) => {
-    const val = Number(m.target_quantity ?? m.target ?? 0)
-    return sum + (isNaN(val) ? 0 : val)
-  }, 0)
+  if (goal <= 0) return eventItem.fulfillment_percent ?? 0
 
-  const totalCurrent = materials.reduce((sum: number, m: any) => {
-    const val = Number(m.current_quantity ?? m.current ?? 0)
-    return sum + (isNaN(val) ? 0 : val)
-  }, 0)
-
-  if (totalTarget <= 0) return 0
-
-  return Math.min(100, Math.round((totalCurrent / totalTarget) * 100))
+  return Math.min(100, Math.round((donated / goal) * 100))
 }
 </script>
 
