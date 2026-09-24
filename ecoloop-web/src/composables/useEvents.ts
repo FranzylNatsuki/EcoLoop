@@ -117,11 +117,9 @@ export function useEvents() {
   }
 
   function transformSupabaseToEventItem(row: any): EventItem {
-    // FIX 1: Correctly check for empty array before falling back to parseMaterials
     const hasDbMaterials = Array.isArray(row.event_materials) && row.event_materials.length > 0
     const rawMaterials = hasDbMaterials ? row.event_materials : parseMaterials(row.materials_needed)
 
-    // FIX 2: Added safety guard (rawMaterials || []) to prevent runtime crash
     const materials: MaterialNeed[] = (rawMaterials || []).map((m: any) => ({
       id: m.id,
       material: m.material_name || m.material || m.name || 'Material',
@@ -138,7 +136,6 @@ export function useEvents() {
     const diffTime = eventDate.getTime() - Date.now()
     const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
 
-    // FIX 3: Unpack author & profile_data arrays from Supabase query response
     const rawAuthor = Array.isArray(row.author) ? row.author[0] : row.author
     const rawProfile = Array.isArray(rawAuthor?.profile_data) ? rawAuthor?.profile_data[0] : rawAuthor?.profile_data
 
@@ -173,8 +170,7 @@ export function useEvents() {
     }
   }
 
-  // Fetch Events
-  async function fetchEvents(options?: { category?: string; limit?: number }) {
+  async function fetchEvents(options?: { category?: string; limit?: number; searchQuery?: string }) {
     loading.value = true
     try {
       let query = supabase
@@ -188,14 +184,24 @@ export function useEvents() {
           event_materials ( id, material_name, target_quantity, current_quantity, unit )
         `)
         .order('created_at', { ascending: false })
+        .limit(options?.limit || 20)
 
       if (options?.category && options.category !== 'All') {
         query = query.eq('category', options.category)
       }
 
-      if (options?.limit) {
-        query = query.limit(options.limit)
-      }
+      // Connect the search query to Postgres
+            if (options?.searchQuery && options.searchQuery.trim().length > 0) {
+              const terms = options.searchQuery.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/)
+
+              if (terms.length > 0 && terms[0] !== '') {
+                const formattedQuery = terms.join(' & ') + ':*'
+
+                query = query.textSearch('fts', formattedQuery, {
+                  config: 'english'
+                })
+              }
+            }
 
       const { data, error } = await query
 
@@ -210,9 +216,8 @@ export function useEvents() {
     }
   }
 
-  // Fetch Single Event
   async function fetchEventById(id: string): Promise<EventItem | null> {
-    loading.value = true // FIX 4: Explicitly set loading state
+    loading.value = true
     try {
       const { data, error } = await supabase
         .from('events')
@@ -251,7 +256,6 @@ export function useEvents() {
 
       const allItems = pledgeItemsData || []
 
-      // --- A. Recent Pledges ---
       const recentPledges: Pledge[] = allItems.slice(0, 5).map((item: any) => {
         const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
         const donor = Array.isArray(pledge?.donor) ? pledge?.donor[0] : pledge?.donor
@@ -267,7 +271,6 @@ export function useEvents() {
         }
       })
 
-      // --- B. Unique Contributors Count ---
       const uniqueDonorKeys = new Set(
         allItems
           .map((item: any) => {
@@ -279,7 +282,6 @@ export function useEvents() {
       )
       const uniqueContributorsCount = uniqueDonorKeys.size
 
-      // --- C. Top Donors ---
       const donorMap = new Map<string, {
         id: string
         donor: string
@@ -324,7 +326,6 @@ export function useEvents() {
           time: 'Top Contributor'
         }))
 
-      // --- D. Calculate Material Totals ---
       const materialPledgedMap = new Map<string, number>()
       for (const item of allItems) {
         const matName = (item.material_name || '').trim().toLowerCase()
@@ -345,7 +346,6 @@ export function useEvents() {
         })
       }
 
-      // --- E. Fetch Related Events ---
       const { data: relatedData } = await supabase
         .from('events')
         .select(`
@@ -386,11 +386,10 @@ export function useEvents() {
       console.error('Error fetching event details:', err.message || err)
       return null
     } finally {
-      loading.value = false // FIX 4: Always reset loading state
+      loading.value = false
     }
   }
 
-  // Create Event
   async function createEvent(newEventData: CreateEventPayload) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -439,7 +438,6 @@ export function useEvents() {
     }
   }
 
-  // Submit Pledge
   async function submitPledge(payload: SubmitPledgePayload) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()

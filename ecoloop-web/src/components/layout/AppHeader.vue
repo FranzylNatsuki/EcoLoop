@@ -3,17 +3,25 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { BellRing, ChevronDown, User, LogOut } from 'lucide-vue-next'
 import CreatePostButton from './CreatePostButton.vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { supabase } from '../../composables/useAuth' // Import the Supabase client
+import { supabase } from '../../composables/useAuth'
 import NotificationDropdown from './NotificationDropdown.vue'
+import { useSearch } from '../../composables/useSearch'
 
 const isNotifOpen = ref(false)
 const hasUnread = ref(false)
 const router = useRouter()
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
+const notifDropdownRef = ref<HTMLElement | null>(null)
 
-const userAvatar = ref<string | null>(null) // Add this state
+const userAvatar = ref<string | null>(null)
 
+const {
+  searchInput,
+  updateSearch,
+  showSuggestions,
+  suggestions
+} = useSearch()
 
 onMounted(async () => {
   document.addEventListener('click', handleClickOutside)
@@ -23,7 +31,6 @@ onMounted(async () => {
   if (session) {
     const userId = session.user.id
 
-    // 1. Existing Avatar Fetch
     const { data: avatarData, error: avatarError } = await supabase
       .from('profile_data')
       .select('Avatar')
@@ -34,16 +41,13 @@ onMounted(async () => {
       userAvatar.value = avatarData.Avatar
     }
 
-    // 2. NEW: Check for unread notifications
     const lastViewed = localStorage.getItem(`last_notif_viewed_${userId}`)
 
-    // We only want a count, not the data, to keep the header lightweight
     let query = supabase
       .from('pledges')
       .select('id, post:cause_requests!inner(author_id)', { count: 'exact', head: true })
       .eq('cause_requests.author_id', userId)
 
-    // If they have checked before, only look for pledges created AFTER that time
     if (lastViewed) {
       query = query.gt('created_at', lastViewed)
     }
@@ -55,54 +59,52 @@ onMounted(async () => {
   }
 })
 
-// Update your toggleNotifDropdown function to clear the badge!
 const toggleNotifDropdown = async () => {
   isNotifOpen.value = !isNotifOpen.value
-  isDropdownOpen.value = false // Close profile menu if open
+  isDropdownOpen.value = false
 
   if (isNotifOpen.value) {
-    // Hide the red dot
     hasUnread.value = false
-
-    // Save the exact moment they opened it to localStorage
     const { data: { session } } = await supabase.auth.getSession()
     if (session) {
       localStorage.setItem(`last_notif_viewed_${session.user.id}`, new Date().toISOString())
     }
   }
 }
-// Toggle profile menu
+
 const toggleDropdown = () => {
   isDropdownOpen.value = !isDropdownOpen.value
 }
 
-// Navigate to Profile page and close dropdown
 const navigateToProfile = () => {
   isDropdownOpen.value = false
   router.push('/profile')
 }
 
-// Execute Supabase logout
 const handleLogout = async () => {
   isDropdownOpen.value = false
-
-  // Destroys the session in Supabase and clears local storage
   await supabase.auth.signOut()
-
-  // Kick the user back to the login screen
   router.push('/login')
 }
 
-// Close dropdown when clicking outside
+const handleSuggestionClick = (item: any) => {
+  if (item.type === 'user') {
+    router.push(`/user/${item.id}`)
+  } else if (item.type === 'event') {
+    router.push(`/events/${item.id}`)
+  } else {
+    router.push(`/post/${item.id}`)
+  }
+
+  showSuggestions.value = false
+  searchInput.value = ''
+}
+
 const handleClickOutside = (event: MouseEvent) => {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
     isDropdownOpen.value = false
   }
 }
-
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside)
-})
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
@@ -112,7 +114,6 @@ onUnmounted(() => {
 <template>
   <header class="app-header">
     <div class="header-container">
-
       <div class="logo">
         <RouterLink to="/home">
           <div data-svg-wrapper data-layer="Group 1" class="Group1" style="position: relative">
@@ -126,40 +127,63 @@ onUnmounted(() => {
       </div>
 
       <div class="header-search">
-        <input type="text" placeholder="Search" />
+        <input
+          type="text"
+          :value="searchInput"
+          @input="e => updateSearch((e.target as HTMLInputElement).value)"
+          @focus="showSuggestions = true"
+          placeholder="Search posts, events, or locations..."
+        />
+
+        <transition name="dropdown-fade">
+          <div
+            v-if="showSuggestions && suggestions.length > 0 && searchInput.trim().length > 0"
+            class="search-suggestions-dropdown"
+          >
+            <div
+              v-for="item in suggestions"
+              :key="item.id"
+              class="suggestion-item"
+              @click="handleSuggestionClick(item)"
+            >
+              <img
+                v-if="item.type === 'user'"
+                :src="item.avatar"
+                class="suggestion-avatar"
+                alt="User Avatar"
+              />
+              <span v-else class="suggestion-icon">
+                {{ item.type === 'event' ? '📅' : '📝' }}
+              </span>
+              <span class="suggestion-title">{{ item.title }}</span>
+            </div>
+          </div>
+        </transition>
       </div>
 
       <div class="header-actions">
-        <!-- Figma-styled Create Post Button -->
         <CreatePostButton />
 
-        <!-- Notification Button -->
-        <!-- Update the Notification Button in your template -->
-        <!-- Notification Button -->
-                <div class="profile-menu-container" ref="notifDropdownRef">
-                  <button class="icon-btn notif-btn" @click="toggleNotifDropdown">
-                    <BellRing :size="18" />
-                    <!-- The Red Dot -->
-                    <span v-if="hasUnread" class="unread-badge"></span>
-                  </button>
+        <div class="profile-menu-container" ref="notifDropdownRef">
+          <button class="icon-btn notif-btn" @click="toggleNotifDropdown">
+            <BellRing :size="18" />
+            <span v-if="hasUnread" class="unread-badge"></span>
+          </button>
+          <transition name="dropdown-fade">
+            <NotificationDropdown v-if="isNotifOpen" />
+          </transition>
+        </div>
 
-                  <transition name="dropdown-fade">
-                    <NotificationDropdown v-if="isNotifOpen" />
-                  </transition>
-                </div>
-        <!-- Profile Menu Wrapper -->
         <div class="profile-menu-container" ref="dropdownRef">
-            <button class="profile" @click="toggleDropdown" :aria-expanded="isDropdownOpen">
-              <!-- Dynamic Avatar! -->
-              <img
-                :src="userAvatar || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png'"
-                alt="Your avatar"
-                style="object-fit: cover;"
-              />
-              <ChevronDown :size="14" :class="{ 'icon-rotated': isDropdownOpen }" />
-            </button>
+          <button class="profile" @click="toggleDropdown" :aria-expanded="isDropdownOpen">
+            <img
+              :src="userAvatar || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png'"
+              alt="Your avatar"
+              style="object-fit: cover;"
+            />
+            <ChevronDown :size="14" :class="{ 'icon-rotated': isDropdownOpen }" />
+          </button>
 
-          <!-- Profile Dropdown Menu -->
           <transition name="dropdown-fade">
             <div v-if="isDropdownOpen" class="dropdown-menu">
               <button class="dropdown-item" @click="navigateToProfile">
@@ -180,130 +204,106 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* ==========================================================================
-   HEADER CONTAINER & CENTERING
-   ========================================================================== */
 .app-header {
-	width: 100%;
-	height: 72px;
-	background: #ffffff;
-	border-bottom: 1px solid #e4e7e3;
-	display: flex;
-	justify-content: center; /* Centers the inner content block */
-	align-items: center;
+  width: 100%;
+  height: 72px;
+  background: #ffffff;
+  border-bottom: 1px solid #e4e7e3;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
-
 .header-container {
-	width: 100%;
-	max-width: 1344px; /* Matches page layout width for equal margins */
-	padding: 0 80px;
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 32px;
+  width: 100%;
+  max-width: 1344px;
+  padding: 0 80px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
 }
-
-/* ==========================================================================
-   LOGO & SEARCH
-   ========================================================================== */
 .logo {
-	font-family: 'Outfit', sans-serif;
-	font-size: 22px;
-	font-weight: 800;
-	color: #778732;
-	white-space: nowrap;
+  font-family: 'Outfit', sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+  color: #778732;
+  white-space: nowrap;
 }
-
 .header-search {
-	flex: 1;
-	max-width: 600px;
+  flex: 1;
+  max-width: 600px;
+  position: relative;
 }
-
 .header-search input {
-	width: 100%;
-	height: 42px;
-	border: 1px solid #e4e7e3;
-	border-radius: 20px;
-	padding: 0 16px;
-	font-size: 14px;
-	background: #f7f8f6;
-	color: #1a1d1a;
-	outline: none;
+  width: 100%;
+  height: 42px;
+  border: 1px solid #e4e7e3;
+  border-radius: 20px;
+  padding: 0 16px;
+  font-size: 14px;
+  background: #f7f8f6;
+  color: #1a1d1a;
+  outline: none;
 }
-
-/* ==========================================================================
-   ACTIONS & CREATE POST BUTTON
-   ========================================================================== */
 .header-actions {
-	display: flex;
-	align-items: center;
-	gap: 16px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
-
-/* --- Create Post Button (Figma Match) --- */
 .btn-create-post {
-	padding: 10px 18px;
-	background: #778732;
-	border-radius: 20px;
-	border: none;
-	display: inline-flex;
-	justify-content: flex-start;
-	align-items: center;
-	gap: 8px;
-	cursor: pointer;
-	transition: background-color 0.2s ease;
+  padding: 10px 18px;
+  background: #778732;
+  border-radius: 20px;
+  border: none;
+  display: inline-flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
 }
-
 .btn-create-post:hover {
-	background: #617024;
+  background: #617024;
 }
-
 .icon-wrapper {
-	width: 14px;
-	height: 14px;
-	display: inline-flex;
-	flex-direction: column;
-	justify-content: center;
-	align-items: center;
+  width: 14px;
+  height: 14px;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
-
 .btn-text {
-	color: #ffffff;
-	font-size: 14px;
-	font-family: 'Outfit', sans-serif;
-	font-weight: 600;
-	word-wrap: break-word;
+  color: #ffffff;
+  font-size: 14px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  word-wrap: break-word;
 }
-
-/* --- Icon & Profile Buttons --- */
 .icon-btn {
-	background: transparent;
-	border: none;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: #525a52;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #525a52;
 }
-
 .profile {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 4px 8px 4px 4px;
-	border: 1px solid #e4e7e3;
-	border-radius: 24px;
-	background: transparent;
-	cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px 4px 4px;
+  border: 1px solid #e4e7e3;
+  border-radius: 24px;
+  background: transparent;
+  cursor: pointer;
 }
-
 .profile img {
-	width: 32px;
-	height: 32px;
-	border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
 }
-
-/* Dropdown Menu Styles */
 .dropdown-menu {
   position: absolute;
   right: 0;
@@ -316,7 +316,6 @@ onUnmounted(() => {
   padding: 6px 0;
   z-index: 50;
 }
-
 .dropdown-item {
   display: flex;
   align-items: center;
@@ -331,45 +330,86 @@ onUnmounted(() => {
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
-
 .dropdown-item:hover {
   background-color: #f1f5f9;
 }
-
 .logout-item:hover {
   color: #ef4444;
   background-color: #fef2f2;
 }
-
-/* Animation Transiton */
 .dropdown-fade-enter-active,
 .dropdown-fade-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
-
 .dropdown-fade-enter-from,
 .dropdown-fade-leave-to {
   opacity: 0;
   transform: translateY(-6px);
 }
-
 .profile-menu-container {
   position: relative;
   display: inline-block;
 }
-
 .notif-btn {
   position: relative;
 }
-
 .unread-badge {
   position: absolute;
   top: 4px;
   right: 4px;
   width: 8px;
   height: 8px;
-  background-color: #ef4444; /* Alert red */
+  background-color: #ef4444;
   border-radius: 50%;
-  border: 2px solid #ffffff; /* Creates a cutout effect against the background */
+  border: 2px solid #ffffff;
+}
+
+.search-suggestions-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 100%;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+  padding: 8px 0;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.suggestion-item:hover {
+  background-color: #f7f8f6;
+}
+
+.suggestion-icon {
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.suggestion-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid #e4e7e3;
+}
+
+.suggestion-title {
+  font-size: 14px;
+  color: #1a1d1a;
+  font-family: 'Outfit', sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>

@@ -2,11 +2,11 @@
 import { ref, computed, onMounted } from 'vue'
 import { supabase } from '../composables/useAuth'
 import PostCard from '../components/posts/PostCard.vue'
-// import SavedProjectsCard from '../components/sidebar/SavedProjectsCard.vue'
 import EditProfileModal from '../components/Modals/EditProfileModal.vue'
 import { usePosts } from '../composables/usePosts'
 import BackButton from '../components/common/BackButton.vue'
 import DonationCard from '../components/posts/DonationCard.vue'
+import { BadgeCheck } from 'lucide-vue-next'
 
 const activeTab = ref('posts')
 const profileData = ref<any>(null)
@@ -19,38 +19,37 @@ const { posts } = usePosts()
 
 // Fetch posts on view mount
 onMounted(async () => {
-  // 1. Actively await the session directly from Supabase so we don't race the initial load
   const { data: { session } } = await supabase.auth.getSession()
 
   if (session) {
     const userId = session.user.id
     console.log("Session found! Fetching data for:", userId)
 
-    // 2. Fetch from your profiles and profile_data tables
+    // Fetch from your profiles, profile_data, and organizations tables
     const { data, error } = await supabase
-      .from('profiles')
-      .select(`
-        *,
-        profile_data (*)
-      `)
-      .eq('id', userId)
-      .single()
-
-    const { data: pledgesData, error: pledgesError } = await supabase
-          .from('pledges')
+          .from('profiles')
           .select(`
             *,
-            post:cause_requests(title),
-            items:pledge_items(material_name, quantity, unit)
+            profile_data (*),
+            organizations!organization_id (*)
           `)
-          .eq('donor_id', userId)
-          .order('created_at', { ascending: false })
+          .eq('id', userId)
+          .single()
+
+    const { data: pledgesData, error: pledgesError } = await supabase
+      .from('pledges')
+      .select(`
+        *,
+        post:cause_requests(title),
+        items:pledge_items(material_name, quantity, unit)
+      `)
+      .eq('donor_id', userId)
+      .order('created_at', { ascending: false })
 
     if (!pledgesError && pledgesData) {
       userPledges.value = pledgesData
     }
 
-    // 3. Log any database errors (like RLS or empty tables)
     if (error) {
       console.error("Database Error:", error.message)
     }
@@ -98,15 +97,15 @@ const handleSaveProfile = async (updatedData: any) => {
   }
 
   // 2. Update profiles table
-    const { error: profileError } = await supabase.from('profiles')
-      .update({
-        full_name: updatedData.fullName,
-        location: updatedData.location,
-        contact_number: updatedData.contact,
-        latitude: updatedData.latitude,   // Added!
-        longitude: updatedData.longitude  // Added!
-      })
-      .eq('id', userId)
+  const { error: profileError } = await supabase.from('profiles')
+    .update({
+      full_name: updatedData.fullName,
+      location: updatedData.location,
+      contact_number: updatedData.contact,
+      latitude: updatedData.latitude,
+      longitude: updatedData.longitude
+    })
+    .eq('id', userId)
 
   if (profileError) console.error("Profile Update Error:", profileError.message)
 
@@ -138,18 +137,13 @@ const handleSaveProfile = async (updatedData: any) => {
 
 // Filter posts matching the logged-in user's database name
 const userPosts = computed(() => {
-  // If posts aren't loaded, or the profile isn't loaded yet, return an empty array
   if (!posts.value || !Array.isArray(posts.value) || !profileData.value) return []
-
-  // Update: Match against full_name instead of name
   return posts.value.filter(post => post.author?.full_name === profileData.value.full_name)
 })
-
 </script>
 
 <template>
   <div class="profile-page">
-    <!-- Profile Header Container -->
     <header class="profile-header-container">
       <img
         class="profile-banner"
@@ -159,7 +153,6 @@ const userPosts = computed(() => {
 
       <div class="profile-info-block" v-if="!isLoading && profileData">
         <div class="avatar-overlap-wrapper">
-          <!-- Dynamic Avatar with fallback -->
           <img
             class="avatar-ring"
             :src="profileData.profile_data?.Avatar || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png'"
@@ -172,22 +165,28 @@ const userPosts = computed(() => {
         <div class="user-meta-main">
           <div class="name-row">
             <div class="names">
-              <!-- Dynamic Name, Email, and Year -->
-              <h1 class="user-display-name">{{ profileData.full_name }}</h1>
+              <h1 class="user-display-name">
+                {{ profileData.full_name }}
+                <BadgeCheck
+                  v-if="profileData.is_org && profileData.organizations?.verification_status === 'verified'"
+                  fill="#3B82F6"
+                  color="white"
+                  :size="24"
+                  class="verified-badge"
+                />
+              </h1>
               <span class="user-subtext">{{ profileData.email }} • Joined {{ new Date(profileData.created_at).getFullYear() }}</span>
             </div>
             <button class="btn-edit-profile" @click="isEditModalOpen = true">
               Edit Profile
             </button>
           </div>
-          <!-- Dynamic Bio -->
           <p class="user-bio">
             {{ profileData.profile_data?.about || 'No bio provided yet.' }}
           </p>
         </div>
       </div>
 
-      <!-- Loading State Fallback -->
       <div class="profile-info-block" v-else>
         <div class="avatar-placeholder-spacer"></div>
         <div class="user-meta-main">
@@ -195,31 +194,24 @@ const userPosts = computed(() => {
         </div>
       </div>
 
-      <!-- Stats Bar: Dynamic Numbers -->
       <div class="profile-stats-wrapper" v-if="!isLoading && profileData">
-              <div class="profile-stats-inner">
-                <div class="stat-item">
-                  <span class="stat-value">{{ profileData.profile_data?.ItemsDonated || 0 }}</span>
-                  <span class="stat-label">Items Donated</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
-                  <span class="stat-label">Projects Supported</span>
-                </div>
-                <!--
-                <div class="stat-item">
-                  <span class="stat-value">{{ profileData.profile_data?.MaterialsCollected || 0 }} lbs</span>
-                  <span class="stat-label">Materials Collected</span>
-                </div> -->
-                <div class="stat-item">
-                  <span class="stat-value">{{ profileData.profile_data?.CommunityScore || 0 }}/5</span>
-                  <span class="stat-label">Community Score</span>
-                </div>
-              </div>
-            </div>
-            <div class="profile-stats-wrapper" v-else></div>
+        <div class="profile-stats-inner">
+          <div class="stat-item">
+            <span class="stat-value">{{ profileData.profile_data?.ItemsDonated || 0 }}</span>
+            <span class="stat-label">Items Donated</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
+            <span class="stat-label">Projects Supported</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ profileData.profile_data?.CommunityScore || 0 }}/5</span>
+            <span class="stat-label">Community Score</span>
+          </div>
+        </div>
+      </div>
+      <div class="profile-stats-wrapper" v-else></div>
 
-      <!-- Tab Navigation -->
       <nav class="profile-tabs" aria-label="Profile section tabs">
         <button
           class="tab-btn"
@@ -235,29 +227,12 @@ const userPosts = computed(() => {
         >
           Donations
         </button>
-        <!--
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'saved' }"
-          @click="activeTab = 'saved'"
-        >
-          Saved Projects
-        </button> -->
-        <!--
-        <button
-          class="tab-btn"
-          :class="{ active: activeTab === 'settings' }"
-          @click="activeTab = 'settings'"
-        >
-          Settings
-        </button> -->
       </nav>
     </header>
-    <!-- Main Content Layout Area -->
+
     <div class="main-layout-wrapper">
-      <!-- Left Feed Area -->
       <section class="left-feed-column">
-                  <BackButton />
+        <BackButton />
         <template v-if="activeTab === 'posts'">
           <PostCard
             v-for="post in userPosts"
@@ -267,27 +242,18 @@ const userPosts = computed(() => {
         </template>
 
         <template v-else-if="activeTab === 'donations'">
-                  <div v-if="userPledges.length === 0" class="empty-state">No completed donations yet.</div>
-                  <DonationCard
-                    v-for="pledge in userPledges"
-                    :key="pledge.id"
-                    :pledge="pledge"
-                  />
-                </template>
+          <div v-if="userPledges.length === 0" class="empty-state">No completed donations yet.</div>
+          <DonationCard
+            v-for="pledge in userPledges"
+            :key="pledge.id"
+            :pledge="pledge"
+          />
+        </template>
 
         <div v-else class="tab-placeholder-card">
           <p>Displaying {{ activeTab }} content...</p>
         </div>
-
-
       </section>
-
-      <!-- Right Sidebar Area -->
-      <!--
-      <aside class="right-sidebar-column">
-        <!--<DonationHistoryCard
-        <SavedProjectsCard />
-        </aside>  -->
     </div>
   </div>
   <EditProfileModal
@@ -321,21 +287,21 @@ const userPosts = computed(() => {
 
 .profile-info-block {
   width: 100%;
-  max-width: 1100px; /* This pulls it closer to the center! */
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 0 40px 24px 40px; /* Reduced side padding slightly */
+  padding: 0 40px 24px 40px;
   position: relative;
   display: flex;
   align-items: flex-end;
   gap: 24px;
-  box-sizing: border-box; /* Keeps padding inside the width */
+  box-sizing: border-box;
 }
 
 .avatar-overlap-wrapper {
   width: 120px;
   height: 120px;
   position: absolute;
-  left: 40px; /* Matches the new padding from the info block */
+  left: 40px;
   top: -60px;
 }
 
@@ -379,6 +345,13 @@ const userPosts = computed(() => {
   font-size: 24px;
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verified-badge {
+  flex-shrink: 0;
 }
 
 .user-subtext {
@@ -412,7 +385,6 @@ const userPosts = computed(() => {
   line-height: 1.5;
 }
 
-/* The wrapper handles the 100% full-screen background and borders */
 .profile-stats-wrapper {
   width: 100%;
   background: #F7F8F6;
@@ -420,7 +392,6 @@ const userPosts = computed(() => {
   border-bottom: 1px solid #E4E7E3;
 }
 
-/* The inner container perfectly aligns with your Avatar and Name */
 .profile-stats-inner {
   width: 100%;
   max-width: 1100px;
@@ -454,7 +425,7 @@ const userPosts = computed(() => {
 
 .profile-tabs {
   width: 100%;
-  max-width: 1100px; /* Matches info block width */
+  max-width: 1100px;
   margin: 0 auto;
   height: 48px;
   padding: 0 40px;

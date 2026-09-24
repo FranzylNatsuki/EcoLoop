@@ -12,6 +12,10 @@ import PublicProfileView from '../views/PublicProfileView.vue'
 import marketplaceactions from '../components/posts/PostActionsMarket.vue'
 import MarketCard from '../components/posts/MarketCard.vue'
 
+// 1. Import the new views (ensure the file paths match where you saved them)
+import ForgotPassword from '../views/ForgotPassword.vue'
+import UpdatePassword from '../views/UpdatePassword.vue'
+
 const router = createRouter({
   history: createWebHistory(),
 
@@ -58,13 +62,30 @@ const router = createRouter({
       component: Login,
       meta: { hideHeader: true },
     },
+
+    // 2. Add the Forgot Password route
+    {
+      path: '/forgot-password',
+      name: 'forgot-password',
+      component: ForgotPassword,
+      meta: { hideHeader: true },
+    },
+
+    // 3. Add the Update Password route (must match the Supabase redirect URL)
+    {
+      path: '/update-password',
+      name: 'update-password',
+      component: UpdatePassword,
+      meta: { hideHeader: true },
+    },
+
     {
       path: '/profile',
       name: 'profile',
       component: Profile,
     },
     {
-      path: '/user/:id', // Public read-only view (relies on URL ID)
+      path: '/user/:id',
       name: 'public-profile',
       component: PublicProfileView,
     },

@@ -6,6 +6,7 @@ import { usePosts } from '../composables/usePosts'
 import PostCard from '../components/posts/PostCard.vue'
 import BackButton from '../components/common/BackButton.vue'
 import DonationCard from '../components/posts/DonationCard.vue'
+import { BadgeCheck } from 'lucide-vue-next'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,22 +49,23 @@ onMounted(async () => {
       .select('score')
       .eq('rater_id', session.user.id)
       .eq('ratee_id', targetUserId)
-      .maybeSingle() // <-- Fixed: Changed to maybeSingle() to avoid 406 errors
+      .maybeSingle()
 
     if (existingRating) {
       myRating.value = existingRating.score
     }
   }
 
-  // Fetch the target user's data
+  // Fetch the target user's data with organizations table join
   const { data, error } = await supabase
-    .from('profiles')
-    .select(`
-      *,
-      profile_data (*)
-    `)
-    .eq('id', targetUserId)
-    .single()
+        .from('profiles')
+        .select(`
+          *,
+          profile_data (*),
+          organizations!organization_id (*)
+        `)
+        .eq('id', targetUserId)
+        .single()
 
   if (error) console.error("Failed to fetch public profile:", error.message)
   if (data) profileData.value = data
@@ -84,11 +86,9 @@ onMounted(async () => {
     publicPledges.value = pledgesData
   }
 
-  // <-- Fixed: Turn off the loading state once everything is fetched
   isLoading.value = false
 })
 
-// <-- Fixed: Moved computed properties outside of onMounted
 const userPledges = computed(() => {
   if (!publicPledges.value) return []
   // Filter out any donations they made to their own projects
@@ -161,18 +161,21 @@ async function submitRating(score: number) {
         <div class="user-meta-main">
           <div class="name-row">
             <div class="names">
-              <h1 class="user-display-name">{{ profileData.full_name }}</h1>
+              <h1 class="user-display-name">
+                {{ profileData.full_name }}
+                <BadgeCheck
+                  v-if="profileData.is_org && profileData.organizations?.verification_status === 'verified'"
+                  fill="#3B82F6"
+                  color="white"
+                  :size="24"
+                  class="verified-badge"
+                />
+              </h1>
               <span class="user-subtext">Joined {{ new Date(profileData.created_at).getFullYear() }}</span>
             </div>
 
             <!-- Follow & Rating Block -->
             <div class="actions-block">
-                <!--
-              <button class="btn-edit-profile" style="background: rgba(119, 135, 50, 0.1); color: #778732;">
-                Follow User
-              </button>
-              -->
-
               <!-- Interactive Star Rating System -->
               <div v-if="currentUserId" class="rating-widget">
                 <span class="rating-label">Rate:</span>
@@ -219,7 +222,6 @@ async function submitRating(score: number) {
             <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
             <span class="stat-label">Projects Supported</span>
           </div>
-          <!-- Materials Collected Removed per instructions -->
           <div class="stat-item">
             <span class="stat-value">{{ profileData.profile_data?.CommunityScore || 0 }}/5</span>
             <span class="stat-label">Community Score</span>
@@ -250,24 +252,20 @@ async function submitRating(score: number) {
         </template>
 
         <!-- RECENT ACTIVITY (DONATIONS) TAB -->
-                <template v-else-if="activeTab === 'donations'">
-                  <div v-if="userPledges.length === 0" class="tab-placeholder-card">
-                    <p>No completed donations to other projects yet.</p>
-                  </div>
+        <template v-else-if="activeTab === 'donations'">
+          <div v-if="userPledges.length === 0" class="tab-placeholder-card">
+            <p>No completed donations to other projects yet.</p>
+          </div>
 
-                  <DonationCard
-                    v-else
-                    v-for="pledge in userPledges"
-                    :key="pledge.id"
-                    :pledge="pledge"
-                  />
-                </template>
+          <DonationCard
+            v-else
+            v-for="pledge in userPledges"
+            :key="pledge.id"
+            :pledge="pledge"
+          />
+        </template>
       </section>
 
-      <!--
-      <aside class="right-sidebar-column">
-        <DonationHistoryCard />
-      </aside> -->
     </div>
   </div>
 </template>
@@ -354,6 +352,13 @@ async function submitRating(score: number) {
   font-size: 24px;
   font-family: 'Outfit', sans-serif;
   font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verified-badge {
+  flex-shrink: 0;
 }
 
 .user-subtext {
@@ -413,7 +418,7 @@ async function submitRating(score: number) {
   border: none;
   padding: 0;
   cursor: pointer;
-  color: #D1D5DB; /* Unselected gray */
+  color: #D1D5DB;
   transition: color 0.15s ease, transform 0.1s ease;
 }
 
@@ -423,7 +428,7 @@ async function submitRating(score: number) {
 }
 
 .star-btn.is-active {
-  color: #F59E0B; /* Active Gold */
+  color: #F59E0B;
 }
 
 .star-btn:hover {

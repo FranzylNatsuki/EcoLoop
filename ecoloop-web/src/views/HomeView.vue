@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch, ref } from 'vue' // NEW: Added watch
 import { useRouter } from 'vue-router'
 import PageLayout from '../components/layout/PageLayout.vue'
 import CategoryBar from '../components/layout/CategoryBar.vue'
@@ -11,17 +11,46 @@ import EventPreview from '../components/sidebar/EventPreview.vue'
 import { useSort } from '../composables/useSort'
 import { usePosts } from '../composables/usePosts'
 import { useEvents } from '../composables/useEvents'
+import { useSearch } from '../composables/useSearch' // NEW
+import { supabase } from '../composables/useAuth'
 
 const router = useRouter()
-const { posts } = usePosts()
+const { posts, fetchPosts } = usePosts() // NEW: extracted fetchPosts
 const { events, fetchEvents } = useEvents()
 const { selectedSort } = useSort()
+const { debouncedSearchQuery } = useSearch() // NEW
+const searchedUsers = ref<any[]>([])
+
 onMounted(() => {
   fetchEvents()
+  // No need to call fetchPosts() here because usePosts calls it internally on load
+})
+
+// NEW: Refetch data anytime the search query updates
+watch(debouncedSearchQuery, async (newQuery) => {
+  fetchEvents({ searchQuery: newQuery })
+  fetchPosts(newQuery)
+
+  // Fetch users for the main feed if there's a search term
+  if (newQuery.trim()) {
+    const { data } = await supabase
+      .from('profiles')
+            .select('id, full_name, location, profile_data(Avatar)')
+            // This correctly uses 'location' for the profiles table
+            .or(`full_name.ilike.%${newQuery.trim()}%,location.ilike.%${newQuery.trim()}%`)
+            .limit(3)
+
+    searchedUsers.value = data || []
+  } else {
+    searchedUsers.value = []
+  }
 })
 
 const feed = computed(() => {
   const combined = [
+    ...posts.value.map((p) => ({ kind: 'post' as const, item: p })),
+    ...events.value.map((e) => ({ kind: 'event' as const, item: e })),
+    ...searchedUsers.value.map(u => ({ kind: 'user' as const, item: u })),
     ...posts.value.map((p) => ({ kind: 'post' as const, item: p })),
     ...events.value.map((e) => ({ kind: 'event' as const, item: e })),
   ]
@@ -36,8 +65,8 @@ const feed = computed(() => {
 
   if (selectedSort.value === 'Top' || selectedSort.value === 'Hot') {
     return combined.sort((a, b) =>
-      ((b.item as any).likes_count || (b.item as any).upvotes || 0) -
-      ((a.item as any).likes_count || (a.item as any).upvotes || 0)
+      ((b.item as any).likes_count || (b.item as any).upvotes || (b.item as any).vote_count || 0) -
+      ((a.item as any).likes_count || (a.item as any).upvotes || (a.item as any).vote_count || 0)
     )
   }
 
@@ -76,16 +105,23 @@ function calculateProgress(eventItem: any): number {
   <div>
     <CategoryBar />
     <PageLayout>
-      <template #main>
-        <template v-for="entry in feed" :key="`${entry.kind}-${entry.item.id}`">
-          <EventCard
-            v-if="entry.kind === 'event'"
-            :event="entry.item"
-            @click="openEvent(entry.item.id)"
-          />
-          <PostCard v-else :post="entry.item" />
-        </template>
-      </template>
+        <template #main>
+                <template v-for="entry in feed" :key="`${entry.kind}-${entry.item.id}`">
+                  <!-- Render User Card -->
+                  <UserCard
+                    v-if="entry.kind === 'user'"
+                    :user="entry.item"
+                  />
+
+                  <EventCard
+                    v-else-if="entry.kind === 'event'"
+                    :event="entry.item"
+                    @click="openEvent(entry.item.id)"
+                  />
+
+                  <PostCard v-else :post="entry.item" />
+                </template>
+              </template>
 
       <!-- Only right sidebar widgets belong here -->
       <template #sidebar>

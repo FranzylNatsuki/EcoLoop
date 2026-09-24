@@ -207,7 +207,9 @@ create table public.event_pledges (
 create index IF not exists event_pledges_event_id_idx on public.event_pledges using btree (event_id) TABLESPACE pg_default;
 ```
 
-`event_pledge_items` - create table public.event_pledge_items (
+`event_pledge_items` - 
+```sql 
+create table public.event_pledge_items (
   id uuid not null default gen_random_uuid (),
   event_pledge_id uuid not null,
   material_name text not null,
@@ -220,7 +222,134 @@ create index IF not exists event_pledges_event_id_idx on public.event_pledges us
 ) TABLESPACE pg_default;
 
 create index IF not exists event_pledge_items_event_pledge_id_idx on public.event_pledge_items using btree (event_pledge_id) TABLESPACE pg_default;
+```
 
+`marketplace_listings` - 
+```sql
+create table public.marketplace_listings (
+  id uuid not null default gen_random_uuid (),
+  author_id uuid not null,
+  title text not null,
+  description text not null,
+  category text not null,
+  post_type text not null default 'marketplace'::text,
+  pricing_type text not null default 'For Sale'::text,
+  pricing_structure text not null default 'Per Unit / kg'::text,
+  price numeric(12, 2) null,
+  quantity numeric(12, 3) null,
+  quantity_unit text not null default 'pcs'::text,
+  status text not null default 'active'::text,
+  created_at timestamp with time zone not null default now(),
+  updated_at timestamp with time zone not null default now(),
+  constraint marketplace_listings_pkey primary key (id),
+  constraint marketplace_listings_author_id_fkey foreign KEY (author_id) references profiles (id) on delete CASCADE,
+  constraint marketplace_listings_description_check check (
+    (
+      (char_length(btrim(description)) >= 1)
+      and (char_length(btrim(description)) <= 5000)
+    )
+  ),
+  constraint marketplace_listings_post_type_check check ((post_type = 'marketplace'::text)),
+  constraint marketplace_listings_price_check check (
+    (
+      (price is null)
+      or (price >= (0)::numeric)
+    )
+  ),
+  constraint marketplace_listings_pricing_structure_check check (
+    (
+      pricing_structure = any (
+        array[
+          'Per Unit / kg'::text,
+          'Bulk Bundle (e.g., per 20 pcs)'::text,
+          'Total Lot Price (Price for All)'::text
+        ]
+      )
+    )
+  ),
+  constraint marketplace_listings_pricing_type_check check (
+    (
+      pricing_type = any (array['For Sale'::text, 'Free/Donation'::text])
+    )
+  ),
+  constraint marketplace_listings_quantity_check check (
+    (
+      (quantity is null)
+      or (quantity >= (0)::numeric)
+    )
+  ),
+  constraint marketplace_listings_quantity_unit_check check (
+    (
+      quantity_unit = any (
+        array[
+          'pcs'::text,
+          'kg'::text,
+          'items'::text,
+          'lots'::text
+        ]
+      )
+    )
+  ),
+  constraint marketplace_listings_status_check check (
+    (
+      status = any (
+        array['active'::text, 'sold'::text, 'archived'::text]
+      )
+    )
+  ),
+  constraint marketplace_listings_title_check check (
+    (
+      (char_length(btrim(title)) >= 1)
+      and (char_length(btrim(title)) <= 200)
+    )
+  ),
+  constraint marketplace_free_listing_no_price check (
+    (
+      (pricing_type <> 'Free/Donation'::text)
+      or (price is null)
+    )
+  ),
+  constraint marketplace_sale_listing_has_price check (
+    (
+      (pricing_type <> 'For Sale'::text)
+      or (price is not null)
+    )
+  ),
+  constraint marketplace_listings_category_check check (
+    (
+      category = any (
+        array[
+          'Plastics'::text,
+          'Glass'::text,
+          'Paper/Cardboard'::text,
+          'Metal'::text,
+          'Electronics'::text
+        ]
+      )
+    )
+  )
+) TABLESPACE pg_default;
+
+create index IF not exists idx_marketplace_listings_author_id on public.marketplace_listings using btree (author_id) TABLESPACE pg_default;
+
+create index IF not exists idx_marketplace_listings_browse on public.marketplace_listings using btree (status, category, created_at desc) TABLESPACE pg_default;
+```
+
+`marketplace_listing_images` - 
+```sql
+create table public.marketplace_listing_images (
+  id uuid not null default gen_random_uuid (),
+  listing_id uuid not null,
+  image_url text not null,
+  display_order integer not null default 0,
+  created_at timestamp with time zone not null default now(),
+  constraint marketplace_listing_images_pkey primary key (id),
+  constraint marketplace_listing_images_listing_id_fkey foreign KEY (listing_id) references marketplace_listings (id) on delete CASCADE,
+  constraint marketplace_listing_images_display_order_check check ((display_order >= 0))
+) TABLESPACE pg_default;
+
+create index IF not exists idx_marketplace_listing_images_listing_id on public.marketplace_listing_images using btree (listing_id, display_order) TABLESPACE pg_default;
+```
 
 `master trigger` - behaviour for registration
 

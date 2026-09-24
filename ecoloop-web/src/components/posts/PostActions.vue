@@ -125,7 +125,7 @@ onMounted(async () => {
       .select('user_id')
       .eq('post_id', props.postId)
       .eq('user_id', session.user.id)
-      .single()
+      .maybeSingle()
 
     if (likeData) hasLiked.value = true
   }
