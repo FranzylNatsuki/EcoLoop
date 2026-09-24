@@ -27,9 +27,6 @@ const event = ref<EventItem | null>(null)
 const isDonateModalOpen = ref(false)
 const isThankYouModalOpen = ref(false)
 
-// Category Selection State
-const selectedCategory = ref('All')
-
 // Filtered Events Computed List
 const filteredEvents = computed(() => {
   // Read category directly from URL query parameter
