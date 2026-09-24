@@ -1,4 +1,4 @@
-<script setup lang="ts"> //copy this file for events, remove delivery options, retrieve location and location pin from event coordinates saved in table from post, check typescript
+<script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
 import { supabase } from '../../composables/useAuth'
 import L from 'leaflet'
@@ -22,15 +22,9 @@ interface PledgeItemDraft {
   unit: string
 }
 
-const props = withDefaults(
-  defineProps<{
-    postId: string | number
-    targetType?: 'cause' | 'event'
-  }>(),
-  {
-    targetType: 'cause'
-  }
-)
+const props = defineProps<{
+  postId: string | number
+}>()
 
 const isOpen = defineModel<boolean>({ default: false })
 const emit = defineEmits<{
@@ -47,19 +41,10 @@ let mapInstance: L.Map | null = null
 let markerInstance: L.Marker | null = null
 const isMapExpanded = ref(false)
 
-// Active Form State
+// Active Location State from Event
 const latitude = ref<number | null>(null)
 const longitude = ref<number | null>(null)
 const locationAddress = ref('')
-const pickupPreference = ref<'deliver' | 'pickup' | 'community'>('deliver')
-
-// Caching States for Switching Modes
-const postLat = ref<number | null>(null)
-const postLng = ref<number | null>(null)
-const postAddress = ref('')
-const userLat = ref<number | null>(null)
-const userLng = ref<number | null>(null)
-const userAddress = ref('')
 
 // --- Image Upload State ---
 const imagePreviews = ref<string[]>([])
@@ -71,17 +56,11 @@ watch(isOpen, async (open) => {
   if (open) {
     dialogRef.value?.showModal()
 
-    // Reset cache on open
-    userLat.value = null
-    userLng.value = null
-    userAddress.value = ''
-    pickupPreference.value = 'deliver'
-
     // Reset images on open
     imagePreviews.value = []
     imageFiles.value = []
 
-    await fetchPostLocation()
+    await fetchEventLocation()
 
     await nextTick()
     setTimeout(() => initMap(), 100)
@@ -98,69 +77,28 @@ watch(isOpen, async (open) => {
   }
 })
 
-// Fetch the project location to use when "deliver" is selected
-async function fetchPostLocation() {
+// Fetch the event location directly from the events table
+async function fetchEventLocation() {
   if (!props.postId) return
 
   try {
-    const { data } = await supabase
-      .from('cause_requests')
-      .select('latitude, longitude, location_address')
+    const { data, error } = await supabase
+      .from('events')
+      .select('latitude, longitude, location, location_address')
       .eq('id', props.postId)
       .single()
 
-    if (data) {
-      postLat.value = data.latitude
-      postLng.value = data.longitude
-      postAddress.value = data.location_address || ''
+    if (error) throw error
 
-      if (pickupPreference.value === 'deliver') {
-        latitude.value = postLat.value
-        longitude.value = postLng.value
-        locationAddress.value = postAddress.value
-      }
+    if (data) {
+      latitude.value = data.latitude
+      longitude.value = data.longitude
+      locationAddress.value = data.location_address || data.location || ''
     }
   } catch (err) {
-    console.error("Failed to fetch post location:", err)
+    console.error("Failed to fetch event location:", err)
   }
 }
-
-watch(pickupPreference, (newVal, oldVal) => {
-  if (oldVal !== 'deliver') {
-    userLat.value = latitude.value
-    userLng.value = longitude.value
-    userAddress.value = locationAddress.value
-  }
-
-  if (newVal === 'deliver') {
-    latitude.value = postLat.value
-    longitude.value = postLng.value
-    locationAddress.value = postAddress.value
-  } else {
-    latitude.value = userLat.value
-    longitude.value = userLng.value
-    locationAddress.value = userAddress.value
-  }
-
-  if (mapInstance) {
-    if (latitude.value && longitude.value) {
-      const latlng = [latitude.value, longitude.value] as L.LatLngTuple
-      mapInstance.setView(latlng, 15)
-
-      if (!markerInstance) {
-        markerInstance = L.marker(latlng).addTo(mapInstance)
-      } else {
-        markerInstance.setLatLng(latlng)
-      }
-    } else {
-      if (markerInstance) {
-        mapInstance.removeLayer(markerInstance)
-        markerInstance = null
-      }
-      mapInstance.setView([9.3068, 123.3054], 13)
-    }
-  }
-})
 
 function toggleMapExpand() {
   isMapExpanded.value = !isMapExpanded.value
@@ -192,20 +130,6 @@ function initMap() {
   if (latitude.value && longitude.value) {
     markerInstance = L.marker([latitude.value, longitude.value]).addTo(mapInstance)
   }
-
-  mapInstance.on('click', (e: L.LeafletMouseEvent) => {
-    if (pickupPreference.value === 'deliver') return
-
-    const { lat, lng } = e.latlng
-    latitude.value = lat
-    longitude.value = lng
-
-    if (!markerInstance) {
-      markerInstance = L.marker([lat, lng]).addTo(mapInstance!)
-    } else {
-      markerInstance.setLatLng([lat, lng])
-    }
-  })
 }
 
 // --- Image Handlers ---
@@ -249,9 +173,9 @@ async function handleSubmit() {
   errorMessage.value = null
 
   if (!props.postId || props.postId === 'undefined') {
-      errorMessage.value = 'Error: Invalid Post ID.'
-      return
-    }
+    errorMessage.value = 'Error: Invalid Event ID.'
+    return
+  }
 
   const validItems = items.value.filter((i) => i.material_name.trim() !== '')
   if (validItems.length === 0) {
@@ -274,15 +198,13 @@ async function handleSubmit() {
       return
     }
 
-    // 2. Select dynamic DB tables and FK names based on targetType
-    const isEvent = String(props.targetType || '').toLowerCase() === 'event'
+    // 2. Target event-specific tables
+    const parentTable = 'event_pledges'
+    const parentIdField = 'event_id'
+    const itemsTable = 'event_pledge_items'
+    const itemsFkField = 'event_pledge_id'
 
-    const parentTable = isEvent ? 'event_pledges' : 'pledges'
-    const parentIdField = isEvent ? 'event_id' : 'post_id'
-    const itemsTable = isEvent ? 'event_pledge_items' : 'pledge_items'
-    const itemsFkField = isEvent ? 'event_pledge_id' : 'pledge_id'
-
-    // Payload construction
+    // Insert Event Pledge Payload
     const { data: pledge, error: pledgeError } = await supabase
       .from(parentTable)
       .insert({
@@ -290,7 +212,6 @@ async function handleSubmit() {
         donor_id: session.user.id,
         title: title.value.trim(),
         description: description.value.trim(),
-        pickup_preference: pickupPreference.value,
         location_address: locationAddress.value.trim() || null,
         latitude: latitude.value,
         longitude: longitude.value,
@@ -300,10 +221,10 @@ async function handleSubmit() {
       .single()
 
     if (pledgeError || !pledge) {
-      throw new Error(pledgeError?.message || 'Failed to initialize pledge.')
+      throw new Error(pledgeError?.message || 'Failed to initialize event pledge.')
     }
 
-    // 4. Insert Line Items
+    // 3. Insert Line Items
     const payloadItems = validItems.map((item) => ({
       [itemsFkField]: pledge.id,
       material_name: item.material_name.trim(),
@@ -317,11 +238,49 @@ async function handleSubmit() {
 
     if (itemsError) throw new Error(itemsError.message)
 
-    // 3. Upload & Insert Images into pledge_images
+    // 4. Update current_quantity in event_materials table
+    for (const item of validItems) {
+          const matName = item.material_name.trim()
+          const qtyToAdd = Number(item.quantity) || 0
+
+          console.log(`🔍 Searching event_materials for "${matName}" under event ${props.postId}...`)
+
+          const { data: matData, error: selectErr } = await supabase
+            .from('event_materials')
+            .select('id, current_quantity')
+            .eq('event_id', props.postId)
+            .ilike('material_name', matName)
+            .maybeSingle()
+
+          if (selectErr) {
+            console.error(`❌ Error finding material "${matName}":`, selectErr.message)
+            continue
+          }
+
+          if (matData) {
+            const currentQty = Number(matData.current_quantity) || 0
+            const updatedQty = currentQty + qtyToAdd
+
+            const { error: updateErr } = await supabase
+              .from('event_materials')
+              .update({ current_quantity: updatedQty })
+              .eq('id', matData.id)
+
+            if (updateErr) {
+              console.error(`❌ DB Update failed for "${matName}":`, updateErr.message)
+            } else {
+              console.log(`✅ Updated "${matName}"! Old Qty: ${currentQty} -> New Qty: ${updatedQty}`)
+            }
+          } else {
+            console.warn(`⚠️ No row matching material_name "${matName}" found in event_materials table.`)
+          }
+        }
+
+    // 5. Upload & Insert Images
     for (const file of imageFiles.value) {
       const fileExt = file.name.split('.').pop()
       const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`
-      const filePath = `pledge-images/${fileName}` // Keeping them organized in a subfolder
+      const filePath = `pledge-images/${fileName}`
 
       const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file)
 
@@ -359,6 +318,7 @@ async function handleSubmit() {
     isSubmitting.value = false
   }
 }
+
 </script>
 
 <template>
@@ -380,7 +340,7 @@ async function handleSubmit() {
                 <path d="M12 22V12"/>
               </svg>
             </div>
-            <h2>Donate Materials</h2>
+            <h2>Donate Event Materials</h2>
           </div>
           <button class="close-btn" @click="isOpen = false">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1A1D1A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -413,7 +373,7 @@ async function handleSubmit() {
                     v-model="item.material_name"
                     type="text"
                     class="form-input material-input"
-                    placeholder="Material name (e.g., Glass Bottles)"
+                    placeholder="Material name (e.g., Water Bottles)"
                   />
                   <div class="qty-unit-group">
                     <div class="quantity-picker mini">
@@ -439,7 +399,7 @@ async function handleSubmit() {
 
             <div class="form-group">
               <label class="form-label">Donation Title</label>
-              <input v-model="title" type="text" class="form-input" placeholder="e.g., Clean bottles from warehouse" />
+              <input v-model="title" type="text" class="form-input" placeholder="e.g., Extra cleanup supplies" />
             </div>
 
             <div class="form-group">
@@ -447,7 +407,7 @@ async function handleSubmit() {
               <textarea v-model="description" class="form-textarea" placeholder="Describe the condition, cleanliness, or batch details..."></textarea>
             </div>
 
-            <!-- Image Uploader inside Left Column -->
+            <!-- Image Uploader -->
             <div class="form-group">
               <label class="form-label">Photos (Optional)</label>
               <div class="photo-grid">
@@ -481,23 +441,13 @@ async function handleSubmit() {
 
           </div>
 
-          <!-- Right Column: Logistics & Location -->
+          <!-- Right Column: Location -->
           <div class="form-column">
             <div class="form-group map-group">
-              <!-- Smart Labeling -->
               <div class="section-label-row">
-                <label class="form-label">
-                  {{ pickupPreference === 'deliver' ? 'Drop-off Location (Project Address)' : 'Pickup / Meetup Location' }}
-                </label>
-
-                <span v-if="pickupPreference === 'deliver'">
-                  <span v-if="latitude" class="text-hint neutral-hint">Map is view-only</span>
-                  <span v-else class="text-hint" style="color: #b91c1c;">No project location set</span>
-                </span>
-                <span v-else>
-                  <span v-if="latitude" class="text-hint" style="color:#778732;">Pin dropped!</span>
-                  <span v-else class="text-hint neutral-hint">Click map to drop a pin</span>
-                </span>
+                <label class="form-label">Event Location</label>
+                <span v-if="latitude" class="text-hint neutral-hint">Map location retrieved</span>
+                <span v-else class="text-hint" style="color: #b91c1c;">No event location set</span>
               </div>
 
               <!-- Leaflet Map Container -->
@@ -520,38 +470,13 @@ async function handleSubmit() {
                   <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/>
                   <circle cx="12" cy="10" r="3"/>
                 </svg>
-                <!-- Lock the text input when 'deliver' is active -->
                 <input
                   v-model="locationAddress"
                   type="text"
-                  class="form-input location-input"
-                  :readonly="pickupPreference === 'deliver'"
-                  :class="{ 'read-only-input': pickupPreference === 'deliver' }"
-                  :placeholder="pickupPreference === 'deliver' && !locationAddress ? 'No address provided by project organizer' : 'Type specific address details (optional)...'"
+                  class="form-input location-input read-only-input"
+                  readonly
+                  placeholder="No address provided by event host"
                 />
-              </div>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">Pickup Preferences</label>
-              <div class="radio-group">
-                <label class="radio-option" :class="{ active: pickupPreference === 'deliver' }">
-                  <input type="radio" v-model="pickupPreference" value="deliver" class="sr-only" />
-                  <span class="radio-dot"></span>
-                  <span class="option-label">I can deliver</span>
-                </label>
-
-                <label class="radio-option" :class="{ active: pickupPreference === 'pickup' }">
-                  <input type="radio" v-model="pickupPreference" value="pickup" class="sr-only" />
-                  <span class="radio-dot"></span>
-                  <span class="option-label">Pickup from my location</span>
-                </label>
-
-                <label class="radio-option" :class="{ active: pickupPreference === 'community' }">
-                  <input type="radio" v-model="pickupPreference" value="community" class="sr-only" />
-                  <span class="radio-dot"></span>
-                  <span class="option-label">Meet at community center</span>
-                </label>
               </div>
             </div>
           </div>
@@ -560,7 +485,6 @@ async function handleSubmit() {
         <!-- Footer Actions -->
         <div class="modal-footer">
           <button type="button" class="submit-btn" :disabled="isSubmitting" @click="handleSubmit">
-            <!-- Loading Spinner -->
             <svg v-if="isSubmitting" class="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 12a9 9 0 1 1-6.219-8.56"></path>
             </svg>
@@ -692,19 +616,6 @@ async function handleSubmit() {
   background: #f0f4ea;
 }
 
-.text-btn {
-  background: none;
-  border: none;
-  color: #778732;
-  font-weight: 500;
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.text-btn:hover {
-  text-decoration: underline;
-}
-
 .items-scroll-list {
   display: flex;
   flex-direction: column;
@@ -802,24 +713,16 @@ async function handleSubmit() {
   gap: 6px;
 }
 
-/* Map specific */
 .map-group {
   gap: 10px;
 }
 
 .map-preview {
   width: 100%;
-  height: 200px;
+  height: 250px;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #e5e7eb;
-}
-
-.map-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
 }
 
 .location-address {
@@ -859,67 +762,6 @@ async function handleSubmit() {
   outline: none;
   border-color: #778732;
   box-shadow: 0 0 0 1px #778732;
-}
-
-.radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.radio-option {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.radio-option:hover {
-  background: #f9fafb;
-}
-
-.radio-option.active {
-  border-color: #778732;
-  background: #fbfdf9;
-}
-
-.radio-dot {
-  width: 14px;
-  height: 14px;
-  border: 2px solid #9ca3af;
-  border-radius: 50%;
-  position: relative;
-}
-
-.radio-option.active .radio-dot {
-  border-color: #778732;
-}
-
-.radio-option.active .radio-dot::after {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 8px;
-  height: 8px;
-  background: #778732;
-  border-radius: 50%;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  border: 0;
 }
 
 .modal-footer {
@@ -972,7 +814,6 @@ async function handleSubmit() {
   cursor: not-allowed;
 }
 
-/* Map Enlarge Styles */
 .map-wrapper {
   position: relative;
   width: 100%;
@@ -1017,7 +858,6 @@ async function handleSubmit() {
   border: none;
 }
 
-/* Read-only visual indication */
 .read-only-input {
   background-color: #f9fafb !important;
   color: #6b7280;
@@ -1028,7 +868,6 @@ async function handleSubmit() {
 
 .neutral-hint { color: #6b7280; }
 
-/* Photo Uploader Specifics */
 .photo-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

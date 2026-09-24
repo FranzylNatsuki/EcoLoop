@@ -1,9 +1,48 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Pledge } from '../../types/event'
 
-defineProps<{
+const props = defineProps<{
   donors?: Pledge[]
 }>()
+
+// Group multiple pledges from the same donor into 1 entry with total quantity
+const aggregatedDonors = computed(() => {
+  if (!props.donors || props.donors.length === 0) return []
+
+  const donorMap = new Map<string, {
+    id: string
+    donor: string
+    donor_avatar?: string
+    totalQuantity: number
+    latestTime?: string
+  }>()
+
+  for (const item of props.donors) {
+      // 1. Group key fallback check
+      const key = (item as any).donor_id || item.id || item.donor || 'anonymous'
+
+      // 2. Parse number out of strings
+      const parsedQty = parseInt(String(item.quantity || ''), 10)
+      const qty = isNaN(parsedQty) ? 0 : parsedQty
+
+      if (!donorMap.has(key)) {
+        donorMap.set(key, {
+          id: String(key),
+          donor: item.donor || 'Anonymous',
+          donor_avatar: item.donor_avatar,
+          totalQuantity: qty,
+          latestTime: item.time
+        })
+      } else {
+        const existing = donorMap.get(key)!
+        existing.totalQuantity += qty
+      }
+    }
+
+  // Convert map to array and sort descending by total pledged items
+  return Array.from(donorMap.values()).sort((a, b) => b.totalQuantity - a.totalQuantity)
+})
 </script>
 
 <template>
@@ -12,10 +51,10 @@ defineProps<{
 
     <div class="event-divider" />
 
-    <div class="donor-list" v-if="donors && donors.length > 0">
+    <div class="donor-list" v-if="aggregatedDonors.length > 0">
       <div
-        v-for="(donor, index) in donors"
-        :key="donor.id || index"
+        v-for="(donor, index) in aggregatedDonors"
+        :key="donor.id"
         class="donor-row"
       >
         <div class="rank">
@@ -30,11 +69,11 @@ defineProps<{
 
         <div class="donor-info">
           <strong>{{ donor.donor }}</strong>
-          <span>{{ donor.time }}</span>
+          <span>Top Contributor</span>
         </div>
 
         <strong class="donor-amount">
-          {{ donor.quantity }}
+          {{ donor.totalQuantity }} items pledged
         </strong>
       </div>
     </div>

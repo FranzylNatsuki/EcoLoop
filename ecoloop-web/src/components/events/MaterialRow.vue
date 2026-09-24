@@ -5,8 +5,8 @@ const props = defineProps<{
   material: {
     name: string
     description?: string
-    current: number
-    target: number
+    current: number | string
+    target: number | string
     unit: string
     image?: string
   }
@@ -14,9 +14,13 @@ const props = defineProps<{
 
 const emit = defineEmits(['donate'])
 
+// Dynamic safely parsed percentage calculation
 const percent = computed(() => {
-  if (!props.material.target) return 0
-  return Math.min(100, Math.round((props.material.current / props.material.target) * 100))
+  const currentVal = Number(props.material.current) || 0
+  const targetVal = Number(props.material.target) || 0
+
+  if (targetVal <= 0) return 0
+  return Math.min(100, Math.round((currentVal / targetVal) * 100))
 })
 </script>
 
@@ -140,5 +144,6 @@ const percent = computed(() => {
   height: 100%;
   background-color: #6e822d;
   border-radius: 4px;
+  transition: width 0.4s ease-in-out;
 }
 </style>

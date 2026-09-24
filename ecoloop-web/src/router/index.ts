@@ -29,8 +29,8 @@ const router = createRouter({
       meta: { hideHeader: true },
     },
     {
-      path: '/events/:id',
-      name: 'event-detail',
+      path: '/events/:id?',
+      name: 'events',
       component: EventsView,
       meta: { hideHeader: false },
     },
