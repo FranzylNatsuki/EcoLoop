@@ -26,7 +26,7 @@ export interface MarketplaceListing {
   price: number | null
   quantity: number | null
   quantity_unit: 'pcs' | 'kg' | 'items' | 'lots'
-  status: 'active' | 'sold' | 'archived'
+  status: 'available' | 'sold' | 'archived'
   created_at: string
   updated_at: string
   author: Author
@@ -60,7 +60,7 @@ export function useMarketplace() {
             profile_data ( Avatar )
           )
         `)
-        .eq('status', 'active')
+        .eq('status', 'available')
         .order('created_at', { ascending: false })
 
       if (error) throw error
@@ -108,7 +108,7 @@ export function useMarketplace() {
           price: finalPrice,
           quantity: newListingData.quantity,
           quantity_unit: newListingData.quantity_unit,
-          status: 'active'
+          status: 'available'
         })
         .select()
         .single()

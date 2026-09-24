@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { supabase } from '../composables/useAuth'
 import L from 'leaflet'
@@ -78,7 +78,13 @@ const fetchPledgeDetails = async (id: string) => {
 }
 
 onMounted(() => {
-  fetchPledgeDetails(route.params.id as string)
+  const routeId = route.params.id
+  if (typeof routeId === 'string') fetchPledgeDetails(routeId)
+  else if (Array.isArray(routeId) && routeId[0]) fetchPledgeDetails(routeId[0])
+  else {
+    errorMessage.value = 'A pledge ID was not provided.'
+    isLoading.value = false
+  }
 })
 
 const isPostAuthor = computed(() => {
@@ -190,9 +196,9 @@ const formatDate = (dateString: string) => {
 watch(
   () => route.params.id,
   (newId) => {
-    if (newId && route.name === 'pledgedetail') {
-      fetchPledgeDetails(newId as string)
-    }
+    if (route.name !== 'pledgedetail') return
+    const id = Array.isArray(newId) ? newId[0] : newId
+    if (typeof id === 'string' && id.length > 0) fetchPledgeDetails(id)
   }
 )
 </script>

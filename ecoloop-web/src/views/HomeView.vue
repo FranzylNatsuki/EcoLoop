@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import PageLayout from '../components/layout/PageLayout.vue'
+import BuyRequestModal from '../components/Modals/BuyRequestModal.vue'
 import CategoryBar from '../components/layout/CategoryBar.vue'
 import PostCard from '../components/posts/PostCard.vue'
 import EventCard from '../components/posts/EventCard.vue'
@@ -17,6 +18,24 @@ const router = useRouter()
 const { posts, fetchPosts } = usePosts()
 const { events, fetchEvents } = useEvents()
 const { listings, fetchListings } = useMarketplace()
+const selectedListing = ref<any>(null)
+const isBuyRequestModalOpen = ref(false)
+
+function handleMarketplaceEdit(post: any) {
+  openMarketplaceItem(post.id)
+}
+
+function handleMarketplaceRequest(post: any) {
+  selectedListing.value = post
+  isBuyRequestModalOpen.value = true
+}
+
+async function refreshMarketplaceRequests() {
+  await fetchListings()
+}
+
+onMounted(() => window.addEventListener('purchase-request-submitted', refreshMarketplaceRequests))
+onUnmounted(() => window.removeEventListener('purchase-request-submitted', refreshMarketplaceRequests))
 
 const combinedFeed = computed(() => {
   const normalizedPosts = (posts.value || []).map(p => ({
@@ -74,6 +93,9 @@ onMounted(() => {
             v-else-if="entry.type === 'marketplace'"
             :post="(entry.item as any)"
             @click="openMarketplaceItem(entry.item.id)"
+            @edit="handleMarketplaceEdit"
+            @request-buy="handleMarketplaceRequest"
+            @purchase-request-submitted="refreshMarketplaceRequests"
           />
           <PostCard v-else :post="(entry.item as any)" />
         </template>
@@ -107,6 +129,11 @@ onMounted(() => {
         />
       </template>
     </PageLayout>
+    <BuyRequestModal
+      v-model="isBuyRequestModalOpen"
+      :post="selectedListing"
+      @submit="refreshMarketplaceRequests"
+    />
   </div>
 </template>
 

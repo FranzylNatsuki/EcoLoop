@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { Calendar, X, ChevronDown, Camera, MapPin, ChevronRight } from 'lucide-vue-next'
-import RequestMaterialsModal from './RequestMaterialsModal.vue'
+import { Calendar, X, ChevronDown, Camera, ChevronRight } from 'lucide-vue-next'
+import BuyRequestModal from './BuyRequestModal.vue'
 
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -163,8 +163,18 @@ function handleSubmit() {
   isMaterialsModalOpen.value = true
 }
 
-function handleMaterialsPublish(payload: { event: any; materials: any[] }) {
-  emit('publish', payload)
+function handleMaterialsPublish(payload: { event?: any; materials?: any[]; material_name?: string; quantity?: number }) {
+  if (payload.event && payload.materials) {
+    emit('publish', payload as { event: any; materials: any[] })
+    return
+  }
+
+  emit('publish', {
+    event: draftEventData.value,
+    materials: payload.material_name
+      ? [{ id: Date.now().toString(), name: payload.material_name, quantity: payload.quantity || 1, unit: 'pcs' }]
+      : []
+  })
 }
 </script>
 
@@ -366,10 +376,10 @@ function handleMaterialsPublish(payload: { event: any; materials: any[] }) {
     </dialog>
   </Teleport>
 
-  <RequestMaterialsModal
+  <BuyRequestModal
     v-model="isMaterialsModalOpen"
-    :event-details="draftEventData"
-    @publish="handleMaterialsPublish"
+    :post="draftEventData"
+    @submit="handleMaterialsPublish"
   />
 </template>
 
