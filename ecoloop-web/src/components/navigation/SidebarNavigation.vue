@@ -23,8 +23,9 @@ const pageItems = [
 function handleSortClick(label: string) {
   setSort(label)
 
-  // Redirect to home if user is on another page when clicking a sort option
-  if (route.path !== '/home' && route.path !== '/') {
+  // Allow sorting to happen in place on home, root, and marketplace
+  const allowedSortPaths = ['/home', '/', '/marketplace']
+  if (!allowedSortPaths.includes(route.path)) {
     router.push('/home')
   }
 }
@@ -40,7 +41,9 @@ function handleSortClick(label: string) {
       v-for="item in sortItems"
       :key="item.label"
       class="nav-item"
-      :class="{ 'nav-item--active': selectedSort === item.label && (route.path === '/home' || route.path === '/') }"
+      :class="{
+        'nav-item--active': selectedSort === item.label && ['/home', '/', '/marketplace'].includes(route.path)
+      }"
       @click="handleSortClick(item.label)"
     >
       <component :is="item.icon" :size="16" />

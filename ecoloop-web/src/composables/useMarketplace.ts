@@ -1,10 +1,10 @@
 import { ref, onMounted } from 'vue'
 import { supabase } from './useAuth'
 
-// 1. Interfaces tailored to public.marketplace_listings schema
 export interface Author {
   full_name: string
   Avatar: string
+  score?: number
 }
 
 export interface MarketplaceImage {
@@ -27,6 +27,9 @@ export interface MarketplaceListing {
   quantity: number | null
   quantity_unit: 'pcs' | 'kg' | 'items' | 'lots'
   status: 'available' | 'sold' | 'archived'
+  location_address?: string // New
+  latitude?: number | null  // New
+  longitude?: number | null // New
   created_at: string
   updated_at: string
   author: Author
@@ -42,13 +45,15 @@ export interface CreateMarketplacePayload {
   price: number | null
   quantity: number | null
   quantity_unit: 'pcs' | 'kg' | 'items' | 'lots'
-  images?: string[] // Array of image URLs uploaded prior to calling addListing
+  location_address?: string // New
+  latitude?: number | null  // New
+  longitude?: number | null // New
+  images?: string[]
 }
 
 const listings = ref<MarketplaceListing[]>([])
 
 export function useMarketplace() {
-  // 2. Fetch Marketplace Listings with Relational Joins
   async function fetchListings() {
     try {
       const { data, error } = await supabase
@@ -57,7 +62,8 @@ export function useMarketplace() {
           *,
           author:profiles!author_id (
             full_name,
-            profile_data ( Avatar )
+            profile_data ( Avatar ),
+            user_ratings:user_ratings!user_ratings_ratee_id_fkey ( score )
           )
         `)
         .eq('status', 'available')
@@ -65,19 +71,26 @@ export function useMarketplace() {
 
       if (error) throw error
 
-      listings.value = data.map((listing: any) => ({
-        ...listing,
-        author: {
-          full_name: listing.author?.full_name || 'Anonymous User',
-          Avatar: listing.author?.profile_data?.Avatar || 'https://placehold.co/38x38'
+      listings.value = data.map((listing: any) => {
+        const rawRatings = listing.author?.user_ratings
+        const userScore = Array.isArray(rawRatings)
+          ? (rawRatings[0]?.score || 0)
+          : (rawRatings?.score || 0)
+
+        return {
+          ...listing,
+          author: {
+            full_name: listing.author?.full_name || 'Anonymous User',
+            Avatar: listing.author?.profile_data?.Avatar || 'https://placehold.co/38x38',
+            score: userScore
+          }
         }
-      })) as MarketplaceListing[]
+      }) as MarketplaceListing[]
     } catch (err) {
-      console.error('Error fetching marketplace listings from Supabase:', err)
+      console.error('Error fetching marketplace listings:', err)
     }
   }
 
-  // 3. Add New Marketplace Listing
   async function addListing(newListingData: CreateMarketplacePayload) {
     try {
       const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -87,18 +100,12 @@ export function useMarketplace() {
         return
       }
 
-      const userId = session.user.id
+      const finalPrice = newListingData.pricing_type === 'Free/Donation' ? null : newListingData.price
 
-      // Enforce DB constraint rule: Free items must have a null price
-      const finalPrice = newListingData.pricing_type === 'Free/Donation'
-        ? null
-        : newListingData.price
-
-      // Step A: Insert into marketplace_listings
       const { data: insertedListing, error: insertError } = await supabase
         .from('marketplace_listings')
         .insert({
-          author_id: userId,
+          author_id: session.user.id,
           title: newListingData.title,
           description: newListingData.description,
           category: newListingData.category,
@@ -108,6 +115,9 @@ export function useMarketplace() {
           price: finalPrice,
           quantity: newListingData.quantity,
           quantity_unit: newListingData.quantity_unit,
+          location_address: newListingData.location_address || null, // New
+          latitude: newListingData.latitude || null,                 // New
+          longitude: newListingData.longitude || null,               // New
           status: 'available'
         })
         .select()
@@ -115,34 +125,17 @@ export function useMarketplace() {
 
       if (insertError) throw insertError
 
-      // Step B: Image handling
-      if (newListingData.images && newListingData.images.length > 0) {
-        console.log('Images received for listing:', newListingData.images)
-        // TODO: Insert images into storage or image table when ready
-
-        // Optional step depending on if you have a separate marketplace_images table:
-        // await supabase.from('marketplace_images').insert(imageInserts)
-      }
-
-      // Step C: Refresh local state to immediately update UI
       await fetchListings()
-
       return insertedListing
     } catch (err) {
-      console.error('Error saving marketplace listing to Supabase:', err)
+      console.error('Error saving marketplace listing:', err)
       throw err
     }
   }
 
   onMounted(() => {
-    if (listings.value.length === 0) {
-      fetchListings()
-    }
+    if (listings.value.length === 0) fetchListings()
   })
 
-  return {
-    listings,
-    fetchListings,
-    addListing
-  }
+  return { listings, fetchListings, addListing }
 }

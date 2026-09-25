@@ -6,6 +6,14 @@ const route = useRoute()
 </script>
 
 <template>
-	<AppHeader v-if="!route.meta.hideHeader" />
+	<AppHeader class="sticky-header" v-if="!route.meta.hideHeader" />
 	<RouterView :key="route.fullPath" />
 </template>
+
+<style scoped>
+.sticky-header {
+	position: sticky;
+	top: 0;
+	z-index: 100; /* Ensures the header stays above your scrolling content */
+}
+</style>

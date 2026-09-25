@@ -123,8 +123,7 @@ function openEvent(id: string | number) {
 }
 
 function openMarketplaceItem(id: string | number) {
-  router.push({ name: 'MarketDetail', params: { id } })
-}
+  router.push(`/marketplace/${id}`)}
 
 function handleMarketplaceEdit(post: any) {
   openMarketplaceItem(post.id)

@@ -2,14 +2,14 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '../views/HomeView.vue'
 import EventsView from '../views/EventsView.vue'
-// import MarketplaceView from '../views/MarketplaceView.vue'
+import MarketplaceView from '../views/MarketplaceView.vue' // 1. Uncommented this
 import PostDetailView from '../views/PostDetailView.vue'
 import Registration from '../views/Registration.vue'
 import Profile from '../views/ProfileView.vue'
 import Login from '../views/Login.vue'
 import PublicProfileView from '../views/PublicProfileView.vue'
 
-// 1. Import the new views (ensure the file paths match where you saved them)
+// Import the new views
 import ForgotPassword from '../views/ForgotPassword.vue'
 import UpdatePassword from '../views/UpdatePassword.vue'
 
@@ -35,22 +35,20 @@ const router = createRouter({
       component: EventsView,
       meta: { hideHeader: false },
     },
-    /* *{
-      path: '/marketplace',
+
+    // 2. Updated to include optional :id? parameter
+    {
+      path: '/marketplace/:id?',
       name: 'marketplace',
       component: MarketplaceView,
       meta: { hideHeader: false },
-    }, */
+    },
+
     {
       path: '/post/:id',
       name: 'post-detail',
       component: PostDetailView,
       meta: { hideHeader: false },
-    },
-    {
-      path: '/marketplace/:id',
-      name: 'MarketDetail',
-      component: () => import('../views/MarketDetailView.vue')
     },
     {
       path: '/register',
@@ -64,23 +62,18 @@ const router = createRouter({
       component: Login,
       meta: { hideHeader: true },
     },
-
-    // 2. Add the Forgot Password route
     {
       path: '/forgot-password',
       name: 'forgot-password',
       component: ForgotPassword,
       meta: { hideHeader: true },
     },
-
-    // 3. Add the Update Password route (must match the Supabase redirect URL)
     {
       path: '/update-password',
       name: 'update-password',
       component: UpdatePassword,
       meta: { hideHeader: true },
     },
-
     {
       path: '/profile',
       name: 'profile',
