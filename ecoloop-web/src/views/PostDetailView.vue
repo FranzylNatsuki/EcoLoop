@@ -51,42 +51,41 @@ async function fetchAuthorPostCount(authorId: string) {
 async function fetchPostDetails() {
   try {
     const { data, error: fetchError } = await supabase
-          .from('cause_requests')
-          .select(`
-            *,
-            author:profiles!author_id (
-              full_name,
-              created_at,
-              profile_data ( Avatar, about, "Posts", "CommunityScore" )
-            ),
-            post_images ( image_url, display_order )
-          `)
-          .eq('id', postId)
-          .single()
+      .from('cause_requests')
+      .select(`
+        *,
+        author:profiles!author_id (
+          full_name,
+          created_at,
+          profile_data ( Avatar, about, "Posts", "CommunityScore" )
+        ),
+        post_images ( image_url, display_order )
+      `)
+      .eq('id', postId)
+      .maybeSingle()
 
     if (fetchError) throw fetchError
 
-    // 1. Bypass TS strictness on the raw data
+    if (!data) {
+      error.value = 'Post not found or has been deleted.'
+      return
+    }
+
     const rawData = data as any
-
-    // 2. Safely extract author (in case Supabase returns it as an array)
     const authorRecord = Array.isArray(rawData.author) ? rawData.author[0] : rawData.author
-
-    // 3. Safely extract profile_data (in case Supabase returns it as an array)
     const profileRecord = Array.isArray(authorRecord?.profile_data)
-      ? authorRecord?.profile_data[0]
+      ? authorRecord.profile_data[0]
       : authorRecord?.profile_data
 
-    // 4. Map the clean data
     post.value = {
-          ...rawData,
-          author: {
-            ...authorRecord, // <--- THE FIX: This keeps created_at and the raw profile_data intact!
-            full_name: authorRecord?.full_name || 'Unknown User',
-            Avatar: profileRecord?.Avatar || 'https://placehold.co/38x38',
-            about: profileRecord?.about || 'No bio available.'
-          }
-        }
+      ...rawData,
+      author: {
+        ...authorRecord,
+        full_name: authorRecord?.full_name || 'Unknown User',
+        Avatar: profileRecord?.Avatar || 'https://placehold.co/38x38',
+        about: profileRecord?.about || 'No bio available.'
+      }
+    }
   } catch (err: any) {
     console.error('Failed to fetch post details:', err)
     error.value = err.message || 'Failed to load post details.'

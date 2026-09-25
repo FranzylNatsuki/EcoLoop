@@ -38,7 +38,7 @@ const errorMessage = ref<string | null>(null)
 // --- Map & Location State ---
 const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: L.Map | null = null
-let markerInstance: L.Marker | null = null
+// let markerInstance: L.Marker | null = null
 const isMapExpanded = ref(false)
 
 // Active Location State from Event
@@ -69,7 +69,7 @@ watch(isOpen, async (open) => {
     if (mapInstance) {
       mapInstance.remove()
       mapInstance = null
-      markerInstance = null
+      // markerInstance = null
     }
     // Cleanup images on close
     imagePreviews.value = []
@@ -128,7 +128,7 @@ function initMap() {
   }).addTo(mapInstance)
 
   if (latitude.value && longitude.value) {
-    markerInstance = L.marker([latitude.value, longitude.value]).addTo(mapInstance)
+    L.marker([latitude.value, longitude.value]).addTo(mapInstance)
   }
 }
 

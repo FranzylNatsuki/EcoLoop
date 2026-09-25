@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
-import MarketOnlyView from '../views/MarketOnlyView.vue'
 import HomeView from '../views/HomeView.vue'
 import EventsView from '../views/EventsView.vue'
 import MarketplaceView from '../views/MarketplaceView.vue'
@@ -9,8 +8,6 @@ import Registration from '../views/Registration.vue'
 import Profile from '../views/ProfileView.vue'
 import Login from '../views/Login.vue'
 import PublicProfileView from '../views/PublicProfileView.vue'
-import marketplaceactions from '../components/posts/PostActionsMarket.vue'
-import MarketCard from '../components/posts/MarketCard.vue'
 
 // 1. Import the new views (ensure the file paths match where you saved them)
 import ForgotPassword from '../views/ForgotPassword.vue'
@@ -34,7 +31,7 @@ const router = createRouter({
     },
     {
       path: '/events/:id?',
-      name: 'events',
+      name: 'event-detail',
       component: EventsView,
       meta: { hideHeader: false },
     },
@@ -49,6 +46,11 @@ const router = createRouter({
       name: 'post-detail',
       component: PostDetailView,
       meta: { hideHeader: false },
+    },
+    {
+      path: '/marketplace/:id',
+      name: 'MarketDetail',
+      component: () => import('../views/MarketDetailView.vue')
     },
     {
       path: '/register',
@@ -88,21 +90,6 @@ const router = createRouter({
       path: '/user/:id',
       name: 'public-profile',
       component: PublicProfileView,
-    },
-    {
-      path: '/m/actions',
-      name: 'marketplaceactions',
-      component: marketplaceactions,
-    },
-    {
-      path: '/m/card',
-      name: 'mcard',
-      component: MarketCard,
-    },
-    {
-      path: '/debug-market',
-      name: 'debug-market',
-      component: MarketOnlyView,
     },
     {
       path: '/pledge/:id',

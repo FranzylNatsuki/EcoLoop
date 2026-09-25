@@ -103,16 +103,24 @@ async function fetchPostLocation() {
   if (!props.postId) return
 
   try {
-    const { data } = await supabase
-      .from('cause_requests')
-      .select('latitude, longitude, location_address')
+    const isEvent = String(props.targetType || '').toLowerCase() === 'event'
+    const table = isEvent ? 'events' : 'cause_requests'
+    const addressColumn = isEvent ? 'location' : 'location_address'
+
+    const { data, error } = await supabase
+      .from(table)
+      .select(`latitude, longitude, ${addressColumn}`)
       .eq('id', props.postId)
       .single()
+
+    if (error) {
+      console.error("Supabase query error fetching location:", error.message)
+    }
 
     if (data) {
       postLat.value = data.latitude
       postLng.value = data.longitude
-      postAddress.value = data.location_address || ''
+      postAddress.value = (data as any)[addressColumn] || ''
 
       if (pickupPreference.value === 'deliver') {
         latitude.value = postLat.value
@@ -124,43 +132,6 @@ async function fetchPostLocation() {
     console.error("Failed to fetch post location:", err)
   }
 }
-
-watch(pickupPreference, (newVal, oldVal) => {
-  if (oldVal !== 'deliver') {
-    userLat.value = latitude.value
-    userLng.value = longitude.value
-    userAddress.value = locationAddress.value
-  }
-
-  if (newVal === 'deliver') {
-    latitude.value = postLat.value
-    longitude.value = postLng.value
-    locationAddress.value = postAddress.value
-  } else {
-    latitude.value = userLat.value
-    longitude.value = userLng.value
-    locationAddress.value = userAddress.value
-  }
-
-  if (mapInstance) {
-    if (latitude.value && longitude.value) {
-      const latlng = [latitude.value, longitude.value] as L.LatLngTuple
-      mapInstance.setView(latlng, 15)
-
-      if (!markerInstance) {
-        markerInstance = L.marker(latlng).addTo(mapInstance)
-      } else {
-        markerInstance.setLatLng(latlng)
-      }
-    } else {
-      if (markerInstance) {
-        mapInstance.removeLayer(markerInstance)
-        markerInstance = null
-      }
-      mapInstance.setView([9.3068, 123.3054], 13)
-    }
-  }
-})
 
 function toggleMapExpand() {
   isMapExpanded.value = !isMapExpanded.value

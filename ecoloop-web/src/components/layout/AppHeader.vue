@@ -12,7 +12,7 @@ const hasUnread = ref(false)
 const router = useRouter()
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
-// const notifDropdownRef = ref<HTMLElement | null>(null)
+const notifDropdownRef = ref<HTMLElement | null>(null)
 
 const userAvatar = ref<string | null>(null)
 
@@ -101,8 +101,14 @@ const handleSuggestionClick = (item: any) => {
 }
 
 const handleClickOutside = (event: MouseEvent) => {
-  if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {
+  const target = event.target as Node
+
+  if (dropdownRef.value && !dropdownRef.value.contains(target)) {
     isDropdownOpen.value = false
+  }
+
+  if (notifDropdownRef.value && !notifDropdownRef.value.contains(target)) {
+    isNotifOpen.value = false
   }
 }
 

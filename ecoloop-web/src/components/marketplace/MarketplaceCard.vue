@@ -1,10 +1,48 @@
 <script setup lang="ts">
-// Import the shared interface instead of declaring a local one
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { supabase } from '../../composables/useAuth'
 import type { Listing } from '../../types/marketplace'
 
-defineProps<{
-  listing: Listing
+const props = withDefaults(defineProps<{
+  listing?: Listing
+  post?: Listing
+}>(), {
+  listing: undefined,
+  post: undefined
+})
+
+const emit = defineEmits<{
+  (event: 'edit', listing: Listing | undefined): void
+  (event: 'request-buy', listing: Listing | undefined): void
 }>()
+
+const listingData = computed(() => props.post || props.listing)
+
+const router = useRouter()
+const currentUser = ref<{ id: string } | null>(null)
+
+const isOwner = computed(() => {
+  const source = listingData.value as any
+  const ownerId = source?.author_id || source?.user_id || source?.seller_id || source?.author?.id
+  return Boolean(currentUser.value?.id && ownerId && currentUser.value.id === ownerId)
+})
+
+onMounted(async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  currentUser.value = session?.user ? { id: session.user.id } : null
+})
+
+function openListing() {
+  router.push({ name: 'MarketDetail', params: { id: listingData.value?.id } })
+}
+
+function handleListingAction(event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
+  if (isOwner.value) emit('edit', listingData.value)
+  else emit('request-buy', listingData.value)
+}
 
 const getConditionStyle = (condition: string) => {
   switch (condition) {
@@ -21,31 +59,31 @@ const getConditionStyle = (condition: string) => {
 </script>
 
 <template>
-  <div class="listing-card">
+  <div class="listing-card" role="link" tabindex="0" @click="openListing" @keydown.enter="openListing">
     <div class="image-container">
-      <img :src="listing.image" :alt="listing.title" class="product-photo" />
+      <img :src="listingData?.image" :alt="listingData?.title" class="product-photo" />
       <div
         class="condition-badge"
         :style="{
-          backgroundColor: getConditionStyle(listing.condition).bg,
-          borderColor: getConditionStyle(listing.condition).color
+          backgroundColor: getConditionStyle(listingData?.condition || '').bg,
+          borderColor: getConditionStyle(listingData?.condition || '').color
         }"
       >
-        <span :style="{ color: getConditionStyle(listing.condition).color }">
-          {{ listing.condition }}
+        <span :style="{ color: getConditionStyle(listingData?.condition || '').color }">
+          {{ listingData?.condition }}
         </span>
       </div>
     </div>
 
     <div class="card-body">
       <div class="title-price-row">
-        <h3 class="item-title">{{ listing.title }}</h3>
+        <h3 class="item-title" @click.stop="openListing">{{ listingData?.title }}</h3>
       </div>
       <div class="pricing-row">
-        <span class="item-price" :class="{ 'text-accent': listing.price === 'Free' || listing.price === 'Trade' }">
-          {{ listing.price }}
+        <span class="item-price" :class="{ 'text-accent': listingData?.price === 'Free' || listingData?.price === 'Trade' }">
+          {{ listingData?.price }}
         </span>
-        <span v-if="listing.isBarter" class="trade-pill">BARTER</span>
+        <span v-if="listingData?.isBarter" class="trade-pill">BARTER</span>
       </div>
       <div class="divider-line"></div>
       <div class="meta-row">
@@ -54,18 +92,28 @@ const getConditionStyle = (condition: string) => {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-          <span class="seller-name">{{ listing.seller }}</span>
+          <span class="seller-name">{{ listingData?.seller }}</span>
         </div>
         <div class="meta-item">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2">
             <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
             <circle cx="12" cy="10" r="3"></circle>
           </svg>
-          <span class="location">{{ listing.location }}</span>
+          <span class="location">{{ listingData?.location }}</span>
         </div>
       </div>
+
+      <button
+        type="button"
+        class="listing-action"
+        @click="handleListingAction"
+      >
+        {{ isOwner ? 'Manage Listing' : 'Request to Buy' }}
+      </button>
     </div>
+
   </div>
+
 </template>
 
 <style scoped>
@@ -167,5 +215,21 @@ const getConditionStyle = (condition: string) => {
 
 .location {
   color: #8F9A8F;
+}
+
+.listing-action {
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #778732;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.listing-action:hover {
+  background: #657329;
 }
 </style>

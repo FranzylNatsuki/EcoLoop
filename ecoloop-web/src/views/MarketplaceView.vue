@@ -1,6 +1,8 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import CreateMarketplaceModal from '../components/Modals/CreateMarketplaceModal.vue'
+import BuyRequestModal from '../components/Modals/BuyRequestModal.vue'
 import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
 import PopularCategoriesCard from '../components/marketplace/PopularCategoriesCard.vue'
 import type { Listing } from '../types/marketplace'
@@ -9,6 +11,19 @@ import BackButton from '../components/common/BackButton.vue'
 const activeCategory = ref('All Materials')
 const categories = ['All Materials', 'Wood', 'Glass', 'Metal', 'Plastic', 'Tires', 'Fabric', 'Electronics']
 const mockListings = ref<Listing[]>([])
+const selectedListing = ref<any>(null)
+const showEditModal = ref(false)
+const showBuyModal = ref(false)
+
+function editListing(listing: Listing | undefined) {
+  selectedListing.value = listing
+  showEditModal.value = true
+}
+
+function requestToBuy(listing: Listing | undefined) {
+  selectedListing.value = listing
+  showBuyModal.value = true
+}
 
 </script>
 
@@ -47,6 +62,8 @@ const mockListings = ref<Listing[]>([])
             v-for="item in mockListings"
             :key="item.id"
             :listing="item"
+            @edit="editListing"
+            @request-buy="requestToBuy"
           />
         </div>
       </main>
@@ -55,6 +72,15 @@ const mockListings = ref<Listing[]>([])
         <PopularCategoriesCard />
       </aside>
     </div>
+
+    <CreateMarketplaceModal
+      v-model="showEditModal"
+      :initial-listing="selectedListing"
+    />
+    <BuyRequestModal
+      v-model="showBuyModal"
+      :post="selectedListing"
+    />
   </div>
 </template>
 

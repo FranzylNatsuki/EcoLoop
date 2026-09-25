@@ -102,21 +102,6 @@ export function useEvents() {
   function transformSupabaseToEventItem(row: any): EventItem {
     const donatedItems = Number(row.donated_items || 0)
 
-<<<<<<< HEAD
-    // 1. Calculate total goal from materials_needed array
-    const rawMaterials = Array.isArray(row.materials_needed) ? row.materials_needed : []
-    const computedTarget = rawMaterials.reduce(
-      (sum: number, mat: any) => sum + (Number(mat.target) || 0),
-      0
-    )
-
-    const targetItems = Number(row.target_items) || computedTarget
-
-    // 2. Compute percentage accurately
-    const fulfillmentPercent = targetItems > 0
-      ? Math.min(100, Math.round((donatedItems / targetItems) * 100))
-      : (row.fulfillment_percent || 0)
-=======
       // 1. Calculate total goal from materials_needed array
       const rawMaterials = Array.isArray(row.materials_needed) ? row.materials_needed : []
       const computedTarget = rawMaterials.reduce(
@@ -130,7 +115,6 @@ export function useEvents() {
       const fulfillmentPercent = targetItems > 0
         ? Math.min(100, Math.round((donatedItems / targetItems) * 100))
         : (row.fulfillment_percent || 0)
->>>>>>> origin/9/25/26-filter
 
     const eventDate = new Date(row.event_date || row.schedule || Date.now())
     const diffTime = eventDate.getTime() - Date.now()
@@ -173,12 +157,7 @@ export function useEvents() {
   }
 
   // Fetch Events
-<<<<<<< HEAD
   async function fetchEvents(options?: { category?: string; limit?: number; searchQuery?: string }) {
-=======
-  // Fetch Events
-  async function fetchEvents(options?: { category?: string; limit?: number }) {
->>>>>>> origin/9/25/26-filter
     loading.value = true
     try {
       let query = supabase

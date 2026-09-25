@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Edit3, Megaphone, Calendar, ChevronRight, X } from 'lucide-vue-next'
+import { Edit3, Megaphone, ShoppingBag, Calendar, ChevronRight, X } from 'lucide-vue-next'
 import CreateEventModal from './CreateEventModal.vue'
 import CreateCauseModal from './CreatePost.vue'
+import CreateMarketplaceModal from './CreateMarketplaceModal.vue'
 import { usePosts, type CreatePostPayload } from '../../composables/usePosts'
 import { useEvents } from '../../composables/useEvents'
 import { supabase } from '../../composables/useAuth'
+import { useMarketplace } from '../../composables/useMarketplace'
 
-// Composables
 const { addPost } = usePosts()
 const { createEvent } = useEvents()
+const { addListing } = useMarketplace()
 
-// Type Guard
 function isEventPayload(payload: unknown): payload is { event: any; materials: any[] } {
   return (
     typeof payload === 'object' &&
@@ -21,29 +22,27 @@ function isEventPayload(payload: unknown): payload is { event: any; materials: a
   )
 }
 
-// Two-way binding for modal open state
 const isOpen = defineModel<boolean>({ default: false })
 
-// Explicit Emits Declaration
 const emit = defineEmits<{
   (e: 'publish', payload: unknown): void
   (e: 'selectCause'): void
   (e: 'selectEvent'): void
+  (e: 'selectMarketplace'): void
 }>()
 
-// Template Refs & Child Modal Visibility States
 const dialogRef = ref<HTMLDialogElement | null>(null)
 const isEventModalOpen = ref(false)
 const isCauseModalOpen = ref(false)
+const isMarketplaceModalOpen = ref(false)
 
-// Dialog Visibility Synchronizer
 watch(
   isOpen,
   (open) => {
     if (open) {
       dialogRef.value?.showModal()
-    } else {
-      dialogRef.value?.close()
+    } else if (dialogRef.value?.open) {
+      dialogRef.value.close()
     }
   },
   { immediate: true }
@@ -67,11 +66,28 @@ function handleSelectEvent() {
   emit('selectEvent')
 }
 
-async function handlePublish(payload: unknown) {
-  if (isEventPayload(payload)) {
+function handleSelectMarketplace() {
+  isOpen.value = false
+  isMarketplaceModalOpen.value = true
+  emit('selectMarketplace')
+}
+
+async function handlePublish(payload: any) {
+  if (payload.type === 'marketplace' || payload.post_type === 'marketplace') {
+    await addListing({
+      title: payload.title,
+      description: payload.description,
+      category: payload.category,
+      pricing_type: payload.pricing_type,
+      pricing_structure: payload.pricing_structure,
+      price: payload.price,
+      quantity: payload.quantity,
+      quantity_unit: payload.quantity_unit,
+      images: payload.images
+    })
+  } else if (isEventPayload(payload)) {
     let finalBannerUrl = ''
 
-    // 1. Intercept and upload the raw file to Supabase Storage
     if (payload.event.rawFile) {
       const file = payload.event.rawFile
       const filePath = `event-banners/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`
@@ -92,22 +108,20 @@ async function handlePublish(payload: unknown) {
       finalBannerUrl = publicUrlData.publicUrl
     }
 
-    // 2. Format materials to match the NEW database schema (3NF)
-        const formattedMaterials = (payload.materials || []).map((m: any) => ({
-          material: m.name || m.material_name || m.material || 'Material',
-          target: Number(m.target_quantity || m.target || m.quantity || 1),
-          current: Number(m.current_quantity || m.current || 0),
-          unit: m.unit || 'pcs'
-        }))
+    const formattedMaterials = (payload.materials || []).map((m: any) => ({
+      material: m.name || m.material_name || m.material || 'Material',
+      target: Number(m.target_quantity || m.target || m.quantity || 1),
+      current: Number(m.current_quantity || m.current || 0),
+      unit: m.unit || 'pcs'
+    }))
 
-    // 3. Save to Database using the permanent URL AND Coordinates
     const result = await createEvent({
       title: payload.event.title,
       description: payload.event.description,
       category: payload.event.category,
       location: payload.event.location,
-      latitude: payload.event.latitude || null,   // <-- Added map latitude
-      longitude: payload.event.longitude || null, // <-- Added map longitude
+      latitude: payload.event.latitude || null,
+      longitude: payload.event.longitude || null,
       event_date: `${payload.event.date}T${payload.event.startTime || '00:00'}:00`,
       banner_url: finalBannerUrl,
       materials_needed: formattedMaterials
@@ -118,13 +132,12 @@ async function handlePublish(payload: unknown) {
       return
     }
   } else {
-    // Handling standard posts...
     await addPost(payload as CreatePostPayload)
   }
 
   isCauseModalOpen.value = false
   isEventModalOpen.value = false
-
+  isMarketplaceModalOpen.value = false
   emit('publish', payload)
 }
 </script>
@@ -138,7 +151,6 @@ async function handlePublish(payload: unknown) {
       @click="handleBackdropClick"
     >
       <div class="chooser-card">
-        <!-- Header -->
         <div class="header-row">
           <div class="title-group">
             <div class="icon-container header-icon">
@@ -153,9 +165,7 @@ async function handlePublish(payload: unknown) {
 
         <div class="header-divider"></div>
 
-        <!-- Options Stack -->
         <div class="options-stack">
-          <!-- Cause Request Post -->
           <button type="button" class="selection-card" @click="handleSelectCause">
             <div class="icon-container option-icon">
               <Megaphone :size="20" color="#778732" />
@@ -169,7 +179,6 @@ async function handlePublish(payload: unknown) {
             <ChevronRight :size="16" class="chevron-icon" />
           </button>
 
-          <!-- Event Post -->
           <button type="button" class="selection-card" @click="handleSelectEvent">
             <div class="icon-container option-icon">
               <Calendar :size="20" color="#778732" />
@@ -182,26 +191,29 @@ async function handlePublish(payload: unknown) {
             </div>
             <ChevronRight :size="16" class="chevron-icon" />
           </button>
+
+          <button type="button" class="selection-card" @click="handleSelectMarketplace">
+            <div class="icon-container option-icon">
+              <ShoppingBag :size="20" color="#778732" />
+            </div>
+            <div class="card-text-block">
+              <span class="card-title">Marketplace Listing</span>
+              <span class="card-description">
+                Buy, sell, or trade eco-friendly items, reclaimed materials, and tools
+              </span>
+            </div>
+            <ChevronRight :size="16" class="chevron-icon" />
+          </button>
         </div>
 
-        <!-- Cancel Footer -->
-        <button type="button" class="btn-cancel" @click="isOpen = false">
-          Cancel
-        </button>
+        <button type="button" class="btn-cancel" @click="isOpen = false">Cancel</button>
       </div>
     </dialog>
   </Teleport>
 
-  <!-- Next Steps in Chain -->
-  <CreateCauseModal
-    v-model="isCauseModalOpen"
-    @publish="handlePublish"
-  />
-
-  <CreateEventModal
-    v-model="isEventModalOpen"
-    @publish="handlePublish"
-  />
+  <CreateCauseModal v-model="isCauseModalOpen" @publish="handlePublish" />
+  <CreateEventModal v-model="isEventModalOpen" @publish="handlePublish" />
+  <CreateMarketplaceModal v-model="isMarketplaceModalOpen" @publish="handlePublish" />
 </template>
 
 <style scoped>
@@ -336,39 +348,39 @@ async function handlePublish(payload: unknown) {
 .card-title {
   color: #1A1D1A;
   font-size: 16px;
-  font-family: 'Outfit', sans-serif;
-  font-weight: 600;
 }
 
 .card-description {
   color: #8F9A8F;
   font-size: 13px;
-  font-family: 'Geist', sans-serif;
-  font-weight: 400;
   line-height: 1.4;
 }
 
 .chevron-icon {
   color: #8F9A8F;
-  transition: color 0.2s ease;
   flex-shrink: 0;
 }
 
 .btn-cancel {
   width: 100%;
-  background: transparent;
+  height: 44px;
   border: none;
-  padding-top: 8px;
-  color: #8F9A8F;
+  border-radius: 8px;
+  background: #F7F8F6;
+  color: #1A1D1A;
   font-size: 14px;
-  font-family: 'Outfit', sans-serif;
   font-weight: 600;
-  text-decoration: underline;
   cursor: pointer;
-  text-align: center;
 }
 
 .btn-cancel:hover {
-  color: #1A1D1A;
+  background: #E4E7E3;
+}
+
+@media (max-width: 600px) {
+  .chooser-card {
+    width: calc(100vw - 32px);
+    padding: 20px;
+  }
 }
 </style>
