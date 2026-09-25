@@ -15,3 +15,11 @@ import SidebarNavigation from '../navigation/SidebarNavigation.vue'
 		</aside>
 	</div>
 </template>
+
+<style scoped>
+.page-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+</style>

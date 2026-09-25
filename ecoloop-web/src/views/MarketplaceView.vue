@@ -1,172 +1,151 @@
-
 <script setup lang="ts">
-import { ref } from 'vue'
-import CreateMarketplaceModal from '../components/Modals/CreateMarketplaceModal.vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import PageLayout from '../components/layout/PageLayout.vue'
 import BuyRequestModal from '../components/Modals/BuyRequestModal.vue'
 import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
-import PopularCategoriesCard from '../components/marketplace/PopularCategoriesCard.vue'
-import type { Listing } from '../types/marketplace'
-import BackButton from '../components/common/BackButton.vue'
+import CommunityRules from '../components/sidebar/CommunityRules.vue'
+import { useMarketplace } from '../composables/useMarketplace'
+import type { MarketplaceListing } from '../composables/useMarketplace'
 
-const activeCategory = ref('All Materials')
-const categories = ['All Materials', 'Wood', 'Glass', 'Metal', 'Plastic', 'Tires', 'Fabric', 'Electronics']
-const mockListings = ref<Listing[]>([])
-const selectedListing = ref<any>(null)
-const showEditModal = ref(false)
-const showBuyModal = ref(false)
+const route = useRoute()
+const router = useRouter()
+const { listings, fetchListings } = useMarketplace()
 
-function editListing(listing: Listing | undefined) {
-  selectedListing.value = listing
-  showEditModal.value = true
+const selectedListing = ref<MarketplaceListing | null>(null)
+const isBuyRequestModalOpen = ref(false)
+
+onMounted(() => {
+  fetchListings()
+})
+
+const categories = [
+  { label: 'All', value: '' },
+  { label: 'Plastics', value: 'Plastics' },
+  { label: 'Glass', value: 'Glass' },
+  { label: 'Paper/Cardboard', value: 'Paper/Cardboard' },
+  { label: 'Metal', value: 'Metal' },
+  { label: 'Electronics', value: 'Electronics' },
+]
+
+const activeCategory = computed(() => (route.query.category as string) || '')
+
+function setCategory(value: string) {
+  router.push({ path: '/marketplace', query: value ? { category: value } : {} })
 }
 
-function requestToBuy(listing: Listing | undefined) {
-  selectedListing.value = listing
-  showBuyModal.value = true
+const filteredListings = computed(() => {
+  if (!activeCategory.value) return listings.value
+  return listings.value.filter((l) => l.category === activeCategory.value)
+})
+
+function openMarketplaceItem(id: string | number) {
+  router.push({ name: 'MarketDetail', params: { id } })
 }
 
+function handleMarketplaceEdit(listing: MarketplaceListing | undefined) {
+  if (!listing) return
+  openMarketplaceItem(listing.id)
+}
+
+function handleMarketplaceRequest(listing: MarketplaceListing | undefined) {
+  if (!listing) return
+  selectedListing.value = listing
+  isBuyRequestModalOpen.value = true
+}
+
+async function refreshListings() {
+  await fetchListings()
+}
 </script>
 
 <template>
-  <!-- Top-level view container -->
-  <div class="marketplace-view">
-    <!-- Category Filter Bar -->
-    <div class="categories-bar">
-      <div class="categories-left">
-        <button
-          v-for="cat in categories"
-          :key="cat"
-          class="category-pill"
-          :class="{ active: activeCategory === cat }"
-          @click="activeCategory = cat"
-        >
-          {{ cat }}
-        </button>
-      </div>
-    </div>
+  <div>
+    <nav class="marketplace-categories">
+      <button
+        v-for="cat in categories"
+        :key="cat.label"
+        class="category-pill"
+        :class="{ 'category-pill--active': activeCategory === cat.value }"
+        @click="setCategory(cat.value)"
+      >
+        {{ cat.label }}
+      </button>
+    </nav>
 
-    <!-- Main Content & Sidebar Grid -->
-    <div class="page-layout">
-      <main class="page-content">
-        <BackButton />
-        <div class="intro-banner">
-          <h2>♻️ Community Circular Marketplace</h2>
-          <p>
-            List materials you have left over or find upcycled materials for your next project.
-            All exchanges help reduce municipal landfill waste.
-          </p>
+    <PageLayout>
+      <template #main>
+        <div v-if="filteredListings.length === 0" class="empty-state">
+          No listings found{{ activeCategory ? ` in "${activeCategory}"` : '' }}.
         </div>
 
-        <div class="listings-grid">
+        <div class="marketplace-grid">
           <MarketplaceCard
-            v-for="item in mockListings"
-            :key="item.id"
-            :listing="item"
-            @edit="editListing"
-            @request-buy="requestToBuy"
+            v-for="listing in filteredListings"
+            :key="listing.id"
+            :listing="listing"
+            @edit="handleMarketplaceEdit"
+            @request-buy="handleMarketplaceRequest"
           />
         </div>
-      </main>
+      </template>
 
-      <aside class="right-sidebar">
-        <PopularCategoriesCard />
-      </aside>
-    </div>
+      <template #sidebar>
+        <CommunityRules />
+      </template>
+    </PageLayout>
 
-    <CreateMarketplaceModal
-      v-model="showEditModal"
-      :initial-listing="selectedListing"
-    />
     <BuyRequestModal
-      v-model="showBuyModal"
+      v-model="isBuyRequestModalOpen"
       :post="selectedListing"
+      @submit="refreshListings"
     />
   </div>
 </template>
 
 <style scoped>
-.marketplace-view {
-  width: 100%;
-  min-height: 100vh;
-  background-color: #F8F9F8;
-}
-
-.categories-bar {
-  background: white;
-  border-bottom: 1px solid #E4E7E3;
-  padding: 14px 48px;
-}
-
-.categories-left {
+.marketplace-categories {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
+  padding: 16px;
 }
 
 .category-pill {
-  border: 1px solid #E4E7E3;
-  background: white;
-  color: #1A1D1A;
-  border-radius: 999px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid #e4e7e3;
+  background: #ffffff;
+  color: #525a52;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
+  transition: all 0.15s ease;
 }
 
-.category-pill.active {
-  background: #778732;
-  color: white;
+.category-pill:hover {
+  background: #f0f4ea;
   border-color: #778732;
 }
 
-.page-layout {
-  display: flex;
-  gap: 24px;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px 48px;
+.category-pill--active {
+  background: #778732;
+  border-color: #778732;
+  color: #ffffff;
 }
 
-.page-content {
-  flex: 1;
-}
-
-.right-sidebar {
-  width: 320px;
-  flex-shrink: 0;
-}
-
-.intro-banner {
-  background: white;
-  border: 1px solid #E4E7E3;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 24px;
-}
-
-.intro-banner h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
-  color: #1A1D1A;
-}
-
-.intro-banner p {
-  margin: 0;
-  font-size: 14px;
-  color: #525A52;
-}
-
-.listings-grid {
+.marketplace-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 20px;
+  gap: 16px;
+  padding: 0 16px 16px;
 }
 
-@media (max-width: 1100px) {
-  .right-sidebar {
-    display: none;
-  }
+.empty-state {
+  padding: 40px 16px;
+  text-align: center;
+  color: #8f9a8f;
+  font-size: 14px;
 }
 </style>

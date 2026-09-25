@@ -60,8 +60,8 @@ ecoloop-web/.env
 node_modules/
 EcoLoop.Api/publish_output/
 EcoLoop.Api/appsettings.json
-ecoloop-web/src/views/MarketOnlyView.vue
-ecoloop-web/src/components/posts/PostActionsMarket.vue
-ecoloop-web/src/components/posts/MarketCard.vue
-ecoloop-web/src/components/Modals/CreateMarketplaceModal.vue
-ecoloop-web/src/components/Modals/MarketplaceInquiryModal.vue
+#ecoloop-web/src/views/MarketOnlyView.vue
+#ecoloop-web/src/components/posts/PostActionsMarket.vue
+#ecoloop-web/src/components/posts/MarketCard.vue
+#ecoloop-web/src/components/Modals/CreateMarketplaceModal.vue
+#ecoloop-web/src/components/Modals/MarketplaceInquiryModal.vue

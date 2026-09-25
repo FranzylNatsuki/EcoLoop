@@ -7,8 +7,9 @@ import CategoryBar from '../components/layout/CategoryBar.vue'
 import PostCard from '../components/posts/PostCard.vue'
 import EventCard from '../components/posts/EventCard.vue'
 import UserCard from '../components/posts/UserCard.vue'
+import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
 import CommunityRules from '../components/sidebar/CommunityRules.vue'
-import TrendingTopics from '../components/sidebar/TrendingTopics.vue'
+// import TrendingTopics from '../components/sidebar/TrendingTopics.vue'
 import EventPreview from '../components/sidebar/EventPreview.vue'
 import { useSort } from '../composables/useSort'
 import { usePosts } from '../composables/usePosts'
@@ -21,14 +22,21 @@ const route = useRoute()
 const router = useRouter()
 const { posts, fetchPosts } = usePosts()
 const { events, fetchEvents } = useEvents()
+const { listings, fetchListings } = useMarketplace()
 const { selectedSort } = useSort()
 const { debouncedSearchQuery } = useSearch()
 const searchedUsers = ref<any[]>([])
+const selectedListing = ref<any>(null)
+const isBuyRequestModalOpen = ref(false)
 
 onMounted(() => {
+  fetchPosts()
   fetchEvents()
-  // No need to call fetchPosts() here because usePosts calls it internally on load
+  fetchListings()
 })
+
+onMounted(() => window.addEventListener('purchase-request-submitted', refreshMarketplaceRequests))
+onUnmounted(() => window.removeEventListener('purchase-request-submitted', refreshMarketplaceRequests))
 
 // Refetch data anytime the search query updates
 watch(debouncedSearchQuery, async (newQuery) => {
@@ -53,6 +61,7 @@ const feed = computed(() => {
   let combined = [
     ...posts.value.map((p) => ({ kind: 'post' as const, item: p })),
     ...events.value.map((e) => ({ kind: 'event' as const, item: e })),
+    ...listings.value.map((l) => ({ kind: 'marketplace' as const, item: l })),
     ...searchedUsers.value.map((u) => ({ kind: 'user' as const, item: u })),
   ]
 
@@ -107,9 +116,15 @@ const feed = computed(() => {
   return combined
 })
 
-const { listings, fetchListings } = useMarketplace()
-const selectedListing = ref<any>(null)
-const isBuyRequestModalOpen = ref(false)
+const sidebarEvents = computed(() => events.value.slice(0, 5))
+
+function openEvent(id: string | number) {
+  router.push(`/events/${id}`)
+}
+
+function openMarketplaceItem(id: string | number) {
+  router.push({ name: 'MarketDetail', params: { id } })
+}
 
 function handleMarketplaceEdit(post: any) {
   openMarketplaceItem(post.id)
@@ -124,39 +139,6 @@ async function refreshMarketplaceRequests() {
   await fetchListings()
 }
 
-onMounted(() => window.addEventListener('purchase-request-submitted', refreshMarketplaceRequests))
-onUnmounted(() => window.removeEventListener('purchase-request-submitted', refreshMarketplaceRequests))
-
-const combinedFeed = computed(() => {
-  const normalizedPosts = (posts.value || []).map(p => ({
-    type: 'post' as const,
-    created_at: p.created_at,
-    item: p
-  }))
-
-  const normalizedEvents = (events.value || []).map(e => ({
-    type: 'event' as const,
-    created_at: e.schedule || (e as any).created_at || new Date().toISOString(),
-    item: e
-  }))
-
-  const normalizedListings = (listings.value || []).map(l => ({
-    type: 'marketplace' as const,
-    created_at: l.created_at,
-    item: l
-  }))
-
-  return [...normalizedPosts, ...normalizedEvents, ...normalizedListings].sort((a, b) =>
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  )
-})
-
-const sidebarEvents = computed(() => events.value.slice(0, 5))
-
-function openEvent(id: string | number) {
-  router.push(`/events/${id}`)
-}
-
 function calculateProgress(eventItem: any): number {
   const goal = Number(eventItem.target_items || 0)
   const donated = Number(eventItem.donated_items || 0)
@@ -165,15 +147,6 @@ function calculateProgress(eventItem: any): number {
 
   return Math.min(100, Math.round((donated / goal) * 100))
 }
-function openMarketplaceItem(id: string | number) {
-  router.push({ name: 'MarketDetail', params: { id } })
-}
-
-onMounted(() => {
-  fetchPosts()
-  fetchEvents()
-  fetchListings()
-})
 </script>
 
 <template>
@@ -194,30 +167,22 @@ onMounted(() => {
             @click="openEvent(entry.item.id)"
           />
 
-          <PostCard v-else :post="entry.item" />
-        <template v-for="entry in combinedFeed" :key="`${entry.type}-${entry.item.id}`">
-          <EventCard
-            v-if="entry.type === 'event'"
-            :event="(entry.item as any)"
-            @click="openEvent(entry.item.id)"
-          />
-          <MarketCard
-            v-else-if="entry.type === 'marketplace'"
-            :post="(entry.item as any)"
-            @click="openMarketplaceItem(entry.item.id)"
+          <MarketplaceCard
+            v-else-if="entry.kind === 'marketplace'"
+            :listing="(entry.item as any)"
+            variant="feed"
             @edit="handleMarketplaceEdit"
             @request-buy="handleMarketplaceRequest"
-            @purchase-request-submitted="refreshMarketplaceRequests"
           />
-          <PostCard v-else :post="(entry.item as any)" />
+
+          <PostCard v-else :post="entry.item" />
         </template>
       </template>
-    </template>
 
       <!-- Only right sidebar widgets belong here -->
       <template #sidebar>
         <CommunityRules />
-        <TrendingTopics />
+        <!-- <TrendingTopics /> -->
 
         <div v-if="sidebarEvents.length > 0" class="sidebar-events-wrapper">
           <EventPreview
@@ -234,14 +199,6 @@ onMounted(() => {
             @click="openEvent(eventItem.id)"
           />
         </div>
-        <EventPreview
-          v-else
-          image="https://placehold.co/247x120"
-          date="Sat, Oct 12"
-          title="Community Clean-Up Day"
-          description="Join us for a neighborhood clean-up and learn how to sort materials for local recycling centers."
-          location="Riverfront Park • 10:00 AM"
-        />
       </template>
     </PageLayout>
     <BuyRequestModal
@@ -257,5 +214,11 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.main-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* single source of truth for spacing */
 }
 </style>

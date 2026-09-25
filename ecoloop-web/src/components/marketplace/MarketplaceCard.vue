@@ -2,19 +2,16 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../../composables/useAuth'
-import type { Listing } from '../../types/marketplace'
+import type { MarketplaceListing } from '../../composables/useMarketplace'
 
 const props = withDefaults(defineProps<{
-  listing?: Listing
-  post?: Listing
-}>(), {
-  listing: undefined,
-  post: undefined
-})
+  listing?: MarketplaceListing
+  post?: MarketplaceListing
+}>(), { listing: undefined, post: undefined })
 
 const emit = defineEmits<{
-  (event: 'edit', listing: Listing | undefined): void
-  (event: 'request-buy', listing: Listing | undefined): void
+  (event: 'edit', listing: MarketplaceListing | undefined): void
+  (event: 'request-buy', listing: MarketplaceListing | undefined): void
 }>()
 
 const listingData = computed(() => props.post || props.listing)
@@ -23,8 +20,7 @@ const router = useRouter()
 const currentUser = ref<{ id: string } | null>(null)
 
 const isOwner = computed(() => {
-  const source = listingData.value as any
-  const ownerId = source?.author_id || source?.user_id || source?.seller_id || source?.author?.id
+  const ownerId = listingData.value?.author_id
   return Boolean(currentUser.value?.id && ownerId && currentUser.value.id === ownerId)
 })
 
@@ -34,7 +30,8 @@ onMounted(async () => {
 })
 
 function openListing() {
-  router.push({ name: 'MarketDetail', params: { id: listingData.value?.id } })
+  if (!listingData.value?.id) return
+  router.push({ name: 'MarketDetail', params: { id: listingData.value.id } })
 }
 
 function handleListingAction(event: MouseEvent) {
@@ -44,16 +41,27 @@ function handleListingAction(event: MouseEvent) {
   else emit('request-buy', listingData.value)
 }
 
-const getConditionStyle = (condition: string) => {
-  switch (condition) {
-    case 'Like New':
-      return { bg: 'rgba(119, 135, 50, 0.12)', color: '#778732' }
-    case 'Fair':
-      return { bg: 'rgba(217, 119, 6, 0.12)', color: '#D97706' }
-    case 'Good':
-      return { bg: 'rgba(134, 162, 177, 0.12)', color: '#86A2B1' }
-    default:
-      return { bg: 'rgba(107, 114, 128, 0.12)', color: '#6B7280' }
+const coverImage = computed(() =>
+  listingData.value?.images?.[0]?.image_url || 'https://placehold.co/400x300'
+)
+
+const sellerName = computed(() => listingData.value?.author?.full_name || 'Anonymous User')
+
+const formattedPrice = computed(() => {
+  const l = listingData.value
+  if (!l) return ''
+  if (l.pricing_type === 'Free/Donation') return 'Free'
+  return l.price != null ? `₱${l.price.toLocaleString()}` : '—'
+})
+
+const isFree = computed(() => listingData.value?.pricing_type === 'Free/Donation')
+
+const getCategoryStyle = (category?: string) => {
+  switch (category) {
+    case 'Electronics': return { bg: 'rgba(134, 162, 177, 0.12)', color: '#86A2B1' }
+    case 'Metal':       return { bg: 'rgba(217, 119, 6, 0.12)', color: '#D97706' }
+    case 'Glass':       return { bg: 'rgba(119, 135, 50, 0.12)', color: '#778732' }
+    default:            return { bg: 'rgba(107, 114, 128, 0.12)', color: '#6B7280' }
   }
 }
 </script>
@@ -61,16 +69,16 @@ const getConditionStyle = (condition: string) => {
 <template>
   <div class="listing-card" role="link" tabindex="0" @click="openListing" @keydown.enter="openListing">
     <div class="image-container">
-      <img :src="listingData?.image" :alt="listingData?.title" class="product-photo" />
+      <img :src="coverImage" :alt="listingData?.title" class="product-photo" />
       <div
         class="condition-badge"
         :style="{
-          backgroundColor: getConditionStyle(listingData?.condition || '').bg,
-          borderColor: getConditionStyle(listingData?.condition || '').color
+          backgroundColor: getCategoryStyle(listingData?.category).bg,
+          borderColor: getCategoryStyle(listingData?.category).color
         }"
       >
-        <span :style="{ color: getConditionStyle(listingData?.condition || '').color }">
-          {{ listingData?.condition }}
+        <span :style="{ color: getCategoryStyle(listingData?.category).color }">
+          {{ listingData?.category }}
         </span>
       </div>
     </div>
@@ -80,10 +88,9 @@ const getConditionStyle = (condition: string) => {
         <h3 class="item-title" @click.stop="openListing">{{ listingData?.title }}</h3>
       </div>
       <div class="pricing-row">
-        <span class="item-price" :class="{ 'text-accent': listingData?.price === 'Free' || listingData?.price === 'Trade' }">
-          {{ listingData?.price }}
+        <span class="item-price" :class="{ 'text-accent': isFree }">
+          {{ formattedPrice }}
         </span>
-        <span v-if="listingData?.isBarter" class="trade-pill">BARTER</span>
       </div>
       <div class="divider-line"></div>
       <div class="meta-row">
@@ -92,14 +99,7 @@ const getConditionStyle = (condition: string) => {
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
-          <span class="seller-name">{{ listingData?.seller }}</span>
-        </div>
-        <div class="meta-item">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2">
-            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-            <circle cx="12" cy="10" r="3"></circle>
-          </svg>
-          <span class="location">{{ listingData?.location }}</span>
+          <span class="seller-name">{{ sellerName }}</span>
         </div>
       </div>
 
@@ -111,10 +111,12 @@ const getConditionStyle = (condition: string) => {
         {{ isOwner ? 'Manage Listing' : 'Request to Buy' }}
       </button>
     </div>
-
   </div>
-
 </template>
+
+<style scoped>
+/* unchanged from your version */
+</style>
 
 <style scoped>
 .listing-card {

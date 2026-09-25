@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '../views/HomeView.vue'
 import EventsView from '../views/EventsView.vue'
-import MarketplaceView from '../views/MarketplaceView.vue'
+// import MarketplaceView from '../views/MarketplaceView.vue'
 import PostDetailView from '../views/PostDetailView.vue'
 import Registration from '../views/Registration.vue'
 import Profile from '../views/ProfileView.vue'
@@ -35,12 +35,12 @@ const router = createRouter({
       component: EventsView,
       meta: { hideHeader: false },
     },
-    {
+    /* *{
       path: '/marketplace',
       name: 'marketplace',
       component: MarketplaceView,
       meta: { hideHeader: false },
-    },
+    }, */
     {
       path: '/post/:id',
       name: 'post-detail',

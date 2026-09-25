@@ -224,8 +224,8 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding-top: 16px;
-  margin-top: 16px;
+  padding-top: 14px;
+  /* margin-top: 16px;  <- remove this line */
   border-top: 1px solid #f0f2ef;
   gap: 12px;
   box-sizing: border-box;

@@ -461,13 +461,14 @@ const requestStats = computed(() => ({
           Requests
         </button>
 
+        <!--
         <button
           class="tab-btn"
           :class="{ active: activeTab === 'saved' }"
           @click="setActiveTab('saved')"
         >
           Saved Projects
-        </button>
+        </button> -->
 
         <!--
         <button
@@ -644,10 +645,6 @@ const requestStats = computed(() => ({
         <div v-else class="tab-placeholder-card">
           <p>Displaying {{ activeTab }} content...</p>
         </div>
-<<<<<<< HEAD
-=======
-
->>>>>>> origin/fiona
       </section>
     </div>
   </div>
