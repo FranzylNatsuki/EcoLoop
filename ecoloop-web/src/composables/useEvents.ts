@@ -58,6 +58,8 @@ export interface EventItem {
   image: string
   materials_needed: MaterialNeed[]
   fulfillment_percent: number
+  donated_items?: number
+  target_items?: number
   organizer: Organizer
   stats: EventStats
   recent_pledges?: Pledge[]
@@ -87,50 +89,32 @@ export interface SubmitPledgePayload {
 const events = ref<EventItem[]>([])
 const loading = ref(false)
 
-export function calculateEventProgress(materials: any[]): number {
-  if (!materials || materials.length === 0) return 0
+export function calculateEventProgress(event: any): number {
+  const goal = Number(event.target_items || 0)
+  const donated = Number(event.donated_items || 0)
 
-  const totalTarget = materials.reduce((sum, mat) => {
-    const qty = Number(mat.target_quantity ?? mat.target ?? 0)
-    return sum + (isNaN(qty) ? 0 : qty)
-  }, 0)
+  if (goal <= 0) return event.fulfillment_percent || 0
 
-  const totalCurrent = materials.reduce((sum, mat) => {
-    const qty = Number(mat.current_quantity ?? mat.current ?? 0)
-    return sum + (isNaN(qty) ? 0 : qty)
-  }, 0)
-
-  if (totalTarget <= 0) return 0
-
-  return Math.min(100, Math.round((totalCurrent / totalTarget) * 100))
+  return Math.min(100, Math.round((donated / goal) * 100))
 }
 
 export function useEvents() {
-
-  function parseMaterials(materialsJson: any): any[] {
-    try {
-      const parsed = typeof materialsJson === 'string' ? JSON.parse(materialsJson) : materialsJson
-      return Array.isArray(parsed) ? parsed : []
-    } catch {
-      return []
-    }
-  }
-
   function transformSupabaseToEventItem(row: any): EventItem {
-    const hasDbMaterials = Array.isArray(row.event_materials) && row.event_materials.length > 0
-    const rawMaterials = hasDbMaterials ? row.event_materials : parseMaterials(row.materials_needed)
+    const donatedItems = Number(row.donated_items || 0)
 
-    const materials: MaterialNeed[] = (rawMaterials || []).map((m: any) => ({
-      id: m.id,
-      material: m.material_name || m.material || m.name || 'Material',
-      target: Number(m.target_quantity || m.target || m.quantity) || 0,
-      current: Number(m.current_quantity || m.current) || 0,
-      unit: m.unit || 'pcs'
-    }))
+    // 1. Calculate total goal from materials_needed array
+    const rawMaterials = Array.isArray(row.materials_needed) ? row.materials_needed : []
+    const computedTarget = rawMaterials.reduce(
+      (sum: number, mat: any) => sum + (Number(mat.target) || 0),
+      0
+    )
 
-    const totalTarget = materials.reduce((acc, m) => acc + m.target, 0)
-    const totalCurrent = materials.reduce((acc, m) => acc + m.current, 0)
-    const fulfillmentPercent = totalTarget > 0 ? Math.min(100, Math.round((totalCurrent / totalTarget) * 100)) : 0
+    const targetItems = Number(row.target_items) || computedTarget
+
+    // 2. Compute percentage accurately
+    const fulfillmentPercent = targetItems > 0
+      ? Math.min(100, Math.round((donatedItems / targetItems) * 100))
+      : (row.fulfillment_percent || 0)
 
     const eventDate = new Date(row.event_date || row.schedule || Date.now())
     const diffTime = eventDate.getTime() - Date.now()
@@ -154,8 +138,10 @@ export function useEvents() {
       description: row.description || '',
       category: row.category || 'General',
       image: row.banner_url || '',
-      materials_needed: materials,
+      materials_needed: row.materials_needed || [],
       fulfillment_percent: fulfillmentPercent,
+      donated_items: donatedItems,
+      target_items: targetItems,
       organizer: {
         name: authorFullName,
         avatar: authorAvatar,
@@ -165,11 +151,12 @@ export function useEvents() {
       stats: {
         days_left: daysLeft,
         total_donors: 0,
-        total_pledged: totalCurrent
+        total_pledged: donatedItems
       }
     }
   }
 
+  // Fetch Events
   async function fetchEvents(options?: { category?: string; limit?: number; searchQuery?: string }) {
     loading.value = true
     try {
@@ -180,34 +167,63 @@ export function useEvents() {
           author:profiles!author_id (
             full_name,
             profile_data:profile_data_fk ( Avatar, about )
-          ),
-          event_materials ( id, material_name, target_quantity, current_quantity, unit )
+          )
         `)
         .order('created_at', { ascending: false })
         .limit(options?.limit || 20)
 
       if (options?.category && options.category !== 'All') {
-        query = query.eq('category', options.category)
+        query = query.ilike('category', options.category.trim())
       }
 
       // Connect the search query to Postgres
-            if (options?.searchQuery && options.searchQuery.trim().length > 0) {
-              const terms = options.searchQuery.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/)
+      if (options?.searchQuery && options.searchQuery.trim().length > 0) {
+        const terms = options.searchQuery.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/)
 
-              if (terms.length > 0 && terms[0] !== '') {
-                const formattedQuery = terms.join(' & ') + ':*'
+        if (terms.length > 0 && terms[0] !== '') {
+          const formattedQuery = terms.join(' & ') + ':*'
 
-                query = query.textSearch('fts', formattedQuery, {
-                  config: 'english'
-                })
-              }
-            }
+          query = query.textSearch('fts', formattedQuery, {
+            config: 'english'
+          })
+        }
+      }
 
-      const { data, error } = await query
-
+      const { data: eventsData, error } = await query
       if (error) throw error
-      if (data) {
-        events.value = data.map((row: any) => transformSupabaseToEventItem(row))
+
+      // Fetch pledge items directly instead of querying missing view
+      const { data: pledgeItemsData, error: pledgeError } = await supabase
+        .from('event_pledge_items')
+        .select(`
+          quantity,
+          pledge:event_pledges!event_pledge_id!inner (
+            event_id
+          )
+        `)
+
+      if (pledgeError) {
+        console.warn('Could not fetch pledge items totals:', pledgeError.message)
+      }
+
+      // Sum donated quantities per event ID
+      const totalsMap = new Map<string, number>()
+      if (pledgeItemsData) {
+        pledgeItemsData.forEach((item: any) => {
+          const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
+          const eventId = pledge?.event_id
+          if (eventId) {
+            const current = totalsMap.get(eventId) || 0
+            totalsMap.set(eventId, current + (Number(item.quantity) || 0))
+          }
+        })
+      }
+
+      if (eventsData) {
+        events.value = eventsData.map((row: any) => {
+          const donated = totalsMap.get(row.id) || 0
+          return transformSupabaseToEventItem({ ...row, donated_items: donated })
+        })
       }
     } catch (err: any) {
       console.error('Error fetching events from Supabase:', err.message || err)
@@ -226,8 +242,7 @@ export function useEvents() {
           author:profiles!author_id (
             full_name,
             profile_data:profile_data_fk ( Avatar, about )
-          ),
-          event_materials ( id, material_name, target_quantity, current_quantity, unit )
+          )
         `)
         .eq('id', id)
         .single()
@@ -256,6 +271,27 @@ export function useEvents() {
 
       const allItems = pledgeItemsData || []
 
+      // 1. Calculate total donated items directly from pledge items
+      const calculatedTotalDonated = allItems.reduce((sum: number, item: any) => {
+        return sum + (Number(item.quantity) || 0)
+      }, 0)
+
+      // 2. Map material_needed and calculate 'current' for each item dynamically
+      const rawMaterials: MaterialNeed[] = data.materials_needed || []
+      const updatedMaterials = rawMaterials.map((mat) => {
+        const currentQty = allItems
+          .filter((item: any) =>
+            item.material_name?.toLowerCase().trim() === mat.material?.toLowerCase().trim()
+          )
+          .reduce((sum: number, item: any) => sum + (Number(item.quantity) || 0), 0)
+
+        return {
+          ...mat,
+          current: currentQty
+        }
+      })
+
+      // --- A. Recent Pledges ---
       const recentPledges: Pledge[] = allItems.slice(0, 5).map((item: any) => {
         const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
         const donor = Array.isArray(pledge?.donor) ? pledge?.donor[0] : pledge?.donor
@@ -326,60 +362,41 @@ export function useEvents() {
           time: 'Top Contributor'
         }))
 
-      const materialPledgedMap = new Map<string, number>()
-      for (const item of allItems) {
-        const matName = (item.material_name || '').trim().toLowerCase()
-        if (matName) {
-          const currentTotal = materialPledgedMap.get(matName) || 0
-          materialPledgedMap.set(matName, currentTotal + (Number(item.quantity) || 0))
-        }
-      }
+      // --- D. Fetch Single Event Donated Total ---
+      const { data: totalRow } = await supabase
+        .from('event_funding_totals')
+        .select('donated_items')
+        .eq('event_id', id)
+        .single()
 
-      if (data.event_materials && Array.isArray(data.event_materials)) {
-        data.event_materials = data.event_materials.map((mat: any) => {
-          const matNameKey = (mat.material_name || '').trim().toLowerCase()
-          const pledgedQty = materialPledgedMap.get(matNameKey)
-          return {
-            ...mat,
-            current_quantity: pledgedQty !== undefined ? pledgedQty : (mat.current_quantity || 0)
-          }
-        })
-      }
+      const donatedItems = calculatedTotalDonated > 0 ? calculatedTotalDonated : Number(totalRow?.donated_items || 0)
 
       const { data: relatedData } = await supabase
         .from('events')
-        .select(`
-          id, title, category, banner_url, materials_needed,
-          event_materials ( target_quantity, current_quantity )
-        `)
+        .select('id, title, category, banner_url')
         .neq('id', id)
         .limit(3)
 
-      const relatedEvents: RelatedEvent[] = (relatedData || []).map((rel: any) => {
-        const mats = rel.event_materials || []
-        const progressPercent = calculateEventProgress(mats)
+      const relatedEvents: RelatedEvent[] = (relatedData || []).map((rel: any) => ({
+        id: rel.id,
+        title: rel.title || 'Untitled Event',
+        category: rel.category || 'Community',
+        image: rel.banner_url || 'https://placehold.co/600x360',
+        fulfillment_percent: calculateEventProgress(rel)
+      }))
 
-        return {
-          id: rel.id,
-          title: rel.title || 'Untitled Event',
-          category: rel.category || 'Community',
-          image: rel.banner_url || 'https://placehold.co/600x360',
-          fulfillment_percent: progressPercent
-        }
-      })
-
-      const eventItem = transformSupabaseToEventItem(data)
-      const totalPledgedSum = (eventItem.materials_needed || []).reduce((acc, m) => acc + (m.current || 0), 0)
+      const eventItem = transformSupabaseToEventItem({ ...data, donated_items: donatedItems })
 
       return {
         ...eventItem,
+        materials_needed: updatedMaterials,
         recent_pledges: recentPledges,
         top_donors: topDonors,
         related_events: relatedEvents,
         stats: {
           days_left: eventItem.stats.days_left,
           total_donors: uniqueContributorsCount,
-          total_pledged: totalPledgedSum
+          total_pledged: donatedItems
         }
       }
     } catch (err: any) {
@@ -407,28 +424,13 @@ export function useEvents() {
           latitude: newEventData.latitude || null,
           longitude: newEventData.longitude || null,
           event_date: newEventData.event_date,
-          banner_url: newEventData.banner_url || null
+          banner_url: newEventData.banner_url || null,
+          materials_needed: newEventData.materials_needed || []
         })
         .select()
         .single()
 
       if (eventError) throw eventError
-
-      if (newEventData.materials_needed && newEventData.materials_needed.length > 0) {
-        const materialInserts = newEventData.materials_needed.map(m => ({
-          event_id: eventData.id,
-          material_name: m.material,
-          target_quantity: m.target,
-          current_quantity: 0,
-          unit: m.unit
-        }))
-
-        const { error: materialsError } = await supabase
-          .from('event_materials')
-          .insert(materialInserts)
-
-        if (materialsError) throw materialsError
-      }
 
       await fetchEvents()
       return { success: true, data: eventData }
