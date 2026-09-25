@@ -12,7 +12,7 @@ const hasUnread = ref(false)
 const router = useRouter()
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
-const notifDropdownRef = ref<HTMLElement | null>(null)
+// const notifDropdownRef = ref<HTMLElement | null>(null)
 
 const userAvatar = ref<string | null>(null)
 
