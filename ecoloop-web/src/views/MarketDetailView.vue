@@ -1,10 +1,23 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { Share2, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { supabase } from '../composables/useAuth'
 import PageLayout from '../components/layout/PageLayout.vue'
 import BackButton from '../components/common/BackButton.vue'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+// --- Vite Leaflet Icon Fix ---
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow
+})
 import PostCommentSection from '../components/posts/PostCommentSection.vue'
 import BuyRequestModal from '../components/Modals/BuyRequestModal.vue'
 import CreateMarketplaceModal from '../components/Modals/CreateMarketplaceModal.vue'
@@ -26,6 +39,12 @@ interface PurchaseRequest {
     username?: string
     full_name?: string
     avatar_url?: string
+    email?: string
+    contact_number?: string
+    address?: string
+    latitude?: number
+    longitude?: number
+    score?: number
   } | null
 }
 
@@ -47,6 +66,36 @@ const isLoading = ref(true)
 const isSubmittingComment = ref(false)
 const isLoadingRequests = ref(false)
 const isUpdatingRequest = ref(false)
+
+const mapContainer = ref<HTMLElement | null>(null)
+let requestMapInstance: L.Map | null = null
+
+watch(selectedRequest, async (newReq) => {
+  if (!newReq) {
+    if (requestMapInstance) {
+      requestMapInstance.remove()
+      requestMapInstance = null
+    }
+    return
+  }
+  
+  if (newReq.buyer && newReq.buyer.latitude && newReq.buyer.longitude) {
+    await nextTick()
+    setTimeout(() => {
+      if (!mapContainer.value) return
+      if (requestMapInstance) {
+        requestMapInstance.remove()
+      }
+      const lat = newReq.buyer?.latitude as number
+      const lng = newReq.buyer?.longitude as number
+      requestMapInstance = L.map(mapContainer.value).setView([lat, lng], 14)
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap'
+      }).addTo(requestMapInstance)
+      L.marker([lat, lng]).addTo(requestMapInstance)
+    }, 100)
+  }
+})
 const error = ref<string | null>(null)
 const currentUser = ref<{ id: string } | null>(null)
 const authLoading = ref(true)
@@ -172,7 +221,12 @@ async function fetchPurchaseRequests() {
         .select(`
           id,
           full_name,
-          profile_data ( Avatar )
+          email,
+          contact_number,
+          address,
+          latitude,
+          longitude,
+          profile_data ( Avatar, "CommunityScore" )
         `)
         .in('id', buyerIds)
 
@@ -187,7 +241,13 @@ async function fetchPurchaseRequests() {
               {
                 id: profile.id,
                 full_name: profile.full_name,
-                avatar_url: pData?.Avatar || null
+                email: profile.email,
+                contact_number: profile.contact_number,
+                address: profile.address,
+                latitude: profile.latitude,
+                longitude: profile.longitude,
+                avatar_url: pData?.Avatar || null,
+                score: pData?.CommunityScore || 0
               }
             ]
           })
@@ -701,11 +761,30 @@ async function handleShare() {
               class="modal-avatar"
             />
             <div>
-              <h3>{{ selectedRequest.buyer?.full_name || selectedRequest.buyer?.username || 'Unknown User' }}</h3>
+              <div class="user-name-row">
+                <h3>{{ selectedRequest.buyer?.full_name || selectedRequest.buyer?.username || 'Unknown User' }}</h3>
+                <div class="user-rating" v-if="selectedRequest.buyer?.score !== undefined">
+                  ⭐ {{ selectedRequest.buyer.score.toFixed(1) }}
+                </div>
+              </div>
               <span class="status-badge" :class="selectedRequest.status || 'pending'">
                 {{ selectedRequest.status || 'Pending' }}
               </span>
             </div>
+          </div>
+          
+          <!-- Contact Info -->
+          <div class="contact-info-box" v-if="selectedRequest.buyer?.email || selectedRequest.buyer?.contact_number">
+            <h4>Contact Buyer</h4>
+            <p v-if="selectedRequest.buyer.email"><strong>Email:</strong> {{ selectedRequest.buyer.email }}</p>
+            <p v-if="selectedRequest.buyer.contact_number"><strong>Phone:</strong> {{ selectedRequest.buyer.contact_number }}</p>
+          </div>
+          
+          <!-- Map & Location -->
+          <div class="location-box" v-if="selectedRequest.buyer?.address || selectedRequest.buyer?.latitude">
+            <h4>Buyer's Location</h4>
+            <p v-if="selectedRequest.buyer.address" class="address-text">{{ selectedRequest.buyer.address }}</p>
+            <div v-if="selectedRequest.buyer.latitude && selectedRequest.buyer.longitude" ref="mapContainer" class="modal-map"></div>
           </div>
 
           <!-- Request Summary Grid -->
@@ -814,6 +893,14 @@ h1 { margin: 8px 0; color: #1a1d1a; }
 .request-card { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #e4e7e3; border-radius: 8px; background: #fff; text-align: left; cursor: pointer; margin-top: 8px; }
 .request-card:hover { border-color: #778732; background: #f7f8f6; }
 .request-avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+.user-name-row { display: flex; align-items: center; gap: 8px; }
+.user-rating { background: #fdf5e6; color: #b8860b; font-size: 11px; padding: 2px 6px; border-radius: 12px; font-weight: bold; }
+.contact-info-box, .location-box { background: #f9fafb; padding: 12px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #eee; }
+.contact-info-box h4, .location-box h4 { margin: 0 0 8px; font-size: 14px; color: #1a1d1a; }
+.contact-info-box p, .location-box p { margin: 4px 0; font-size: 13px; color: #444; }
+.address-text { font-style: italic; color: #666; margin-bottom: 8px !important; }
+.modal-map { width: 100%; height: 200px; border-radius: 6px; background: #eaebec; }
+
 .request-info { display: flex; flex-direction: column; gap: 4px; }
 .request-info small { color: #8f9a8f; }
 
