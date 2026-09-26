@@ -50,7 +50,7 @@ const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: L.Map | null = null
 let markerInstance: L.Marker | null = null
 
-const categories = ['Plastics', 'Glass', 'Paper/Cardboard', 'Metal', 'Electronics']
+const categories = ['Plastics', 'Glass', 'Paper/Cardboard', 'Metal', 'Electronics', 'Wood & Timber', 'Textiles', 'Furniture', 'Appliances', 'Upcycled Goods', 'Other']
 const pricingStructures = [
   'Per Unit / kg',
   'Bulk Bundle (e.g., per 20 pcs)',

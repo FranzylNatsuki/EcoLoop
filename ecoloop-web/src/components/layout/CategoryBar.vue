@@ -29,7 +29,13 @@ const categories = computed(() => {
       'Glass',
       'Paper/Cardboard',
       'Metal',
-      'Electronics'
+      'Electronics',
+      'Wood & Timber',
+      'Textiles',
+      'Furniture',
+      'Appliances',
+      'Upcycled Goods',
+      'Other'
     ]
   }
   
