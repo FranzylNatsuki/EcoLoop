@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { MessageCircle, Share2, Bookmark, Heart } from 'lucide-vue-next'
+import { MessageCircle, Share2, Heart } from 'lucide-vue-next'
 import DonateMaterialsModal from '../Modals/DonateMaterialsModal.vue'
 import EditPostModal from '../Modals/EditPostModal.vue'
 import ThankYouDonationModal from '../Modals/ThankYouDonationModal.vue'
@@ -22,7 +22,7 @@ const props = defineProps<{
   isCompleted?: boolean // <-- Added for Completion State
 }>()
 
-defineEmits<{ share: []; save: []; donate: []; map: [] }>()
+defineEmits<{ share: []; donate: []; map: [] }>()
 
 const router = useRouter()
 
@@ -74,6 +74,22 @@ function handleViewDonations() {
 function handleBackToPost() {
   if (props.postId) {
     router.push(`/post/${props.postId}`)
+  }
+}
+
+// Share Logic
+const showShareToast = ref(false)
+
+async function handleShare() {
+  const url = `${window.location.origin}/post/${props.postId || ''}`
+  try {
+    await navigator.clipboard.writeText(url)
+    showShareToast.value = true
+    setTimeout(() => {
+      showShareToast.value = false
+    }, 2500)
+  } catch (err) {
+    console.error('Failed to copy link:', err)
   }
 }
 
@@ -167,15 +183,15 @@ onMounted(async () => {
         <span>{{ comments }} Comments</span>
       </button>
 
-      <button class="footer-action" @click.stop="$emit('share')">
+      <button class="footer-action" @click.stop="handleShare">
         <Share2 :size="14" />
         <span>Share</span>
       </button>
+    </div>
 
-      <button class="footer-action" @click.stop="$emit('save')">
-        <Bookmark :size="14" />
-        <span>Save</span>
-      </button>
+    <!-- Share Toast -->
+    <div v-if="showShareToast" class="share-toast">
+      Link Copied to Clipboard
     </div>
 
     <!-- Disabled State Check added here -->
@@ -317,5 +333,29 @@ onMounted(async () => {
 }
 .btn-manage:hover {
   background: #e4eadb;
+}
+
+.share-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1d1a;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: fadeInOut 2.5s ease-in-out forwards;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, 20px); }
+  15% { opacity: 1; transform: translate(-50%, 0); }
+  85% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -20px); }
 }
 </style>

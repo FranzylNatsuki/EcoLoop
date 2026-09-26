@@ -17,6 +17,11 @@ L.Icon.Default.mergeOptions({
 
 const isOpen = defineModel<boolean>({ default: false })
 
+const props = defineProps<{
+  initialListing?: any
+  hasPurchaseRequests?: boolean
+}>()
+
 const emit = defineEmits<{
   (e: 'publish', payload: any): void
 }>()
@@ -34,6 +39,8 @@ const price = ref<number | null>(null)
 const quantity = ref<number | null>(null)
 const quantityUnit = ref('pcs')
 const imageFiles = ref<File[]>([])
+const imagePreviews = ref<string[]>([])
+const existingImages = ref<any[]>([])
 
 // Map & Location States
 const locationAddress = ref('')
@@ -52,6 +59,30 @@ const pricingStructures = [
 
 watch(isOpen, async (open) => {
   if (open) {
+    if (props.initialListing) {
+      title.value = props.initialListing.title || ''
+      description.value = props.initialListing.description || ''
+      category.value = props.initialListing.category || 'Plastics'
+      pricingType.value = props.initialListing.pricing_type || 'For Sale'
+      pricingStructure.value = props.initialListing.pricing_structure || 'Per Unit / kg'
+      price.value = props.initialListing.price ?? null
+      quantity.value = props.initialListing.quantity ?? null
+      quantityUnit.value = props.initialListing.quantity_unit || 'pcs'
+      locationAddress.value = props.initialListing.location_address || ''
+      latitude.value = props.initialListing.latitude || null
+      longitude.value = props.initialListing.longitude || null
+      
+      if (props.initialListing.images) {
+        existingImages.value = [...props.initialListing.images]
+      } else {
+        existingImages.value = []
+      }
+      imageFiles.value = []
+      imagePreviews.value = []
+    } else {
+      resetForm()
+    }
+    
     dialogRef.value?.showModal()
     await nextTick()
     setTimeout(() => initMap(), 150)
@@ -85,16 +116,24 @@ function initMap() {
     markerInstance = null
   }
 
-  // Default to Dumaguete
+  // Default to Dumaguete, or use existing coords
   const defaultLat = 9.3068
   const defaultLng = 123.3054
+  
+  const startLat = latitude.value ?? defaultLat
+  const startLng = longitude.value ?? defaultLng
 
-  mapInstance = L.map(mapContainer.value).setView([defaultLat, defaultLng], 13)
+  mapInstance = L.map(mapContainer.value).setView([startLat, startLng], 13)
 
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap',
     maxZoom: 19
   }).addTo(mapInstance)
+
+  // Place initial marker if we have coords
+  if (latitude.value && longitude.value) {
+    markerInstance = L.marker([latitude.value, longitude.value]).addTo(mapInstance)
+  }
 
   mapInstance.on('click', (e: L.LeafletMouseEvent) => {
     const { lat, lng } = e.latlng
@@ -118,8 +157,29 @@ function triggerFileInput() {
 }
 
 function handleFileUpload(event: Event) {
-  const input = event.target as HTMLInputElement
-  imageFiles.value = input.files ? Array.from(input.files) : []
+  const target = event.target as HTMLInputElement
+  if (!target.files) return
+
+  const files = Array.from(target.files)
+  files.forEach((file) => {
+    imageFiles.value.push(file)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        imagePreviews.value.push(e.target.result as string)
+      }
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+function removeExistingImage(idx: number) {
+  existingImages.value.splice(idx, 1)
+}
+
+function removeNewImage(idx: number) {
+  imagePreviews.value.splice(idx, 1)
+  imageFiles.value.splice(idx, 1)
 }
 
 function resetForm() {
@@ -132,6 +192,8 @@ function resetForm() {
   quantity.value = null
   quantityUnit.value = 'pcs'
   imageFiles.value = []
+  imagePreviews.value = []
+  existingImages.value = []
   locationAddress.value = ''
   latitude.value = null
   longitude.value = null
@@ -153,6 +215,7 @@ function handleSubmit() {
     quantity: quantity.value,
     quantityUnit: quantityUnit.value,
     images: imageFiles.value,
+    retained_images: existingImages.value,
     location_address: locationAddress.value,
     latitude: latitude.value,
     longitude: longitude.value,
@@ -181,7 +244,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeyDown))
             <div class="icon-container header-icon">
               <ShoppingBag :size="20" color="#778732" />
             </div>
-            <h2 class="header-title">Create Marketplace Listing</h2>
+            <h2 class="header-title">{{ props.initialListing ? 'Edit Marketplace Listing' : 'Create Marketplace Listing' }}</h2>
           </div>
           <button type="button" class="btn-close" aria-label="Close modal" @click="closeModal">
             <X :size="14" color="#1A1D1A" />
@@ -203,6 +266,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeyDown))
                 type="text"
                 placeholder="e.g., Clean plastic bottles"
                 required
+                :disabled="props.hasPurchaseRequests"
               />
             </div>
 
@@ -221,7 +285,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeyDown))
             <div class="split-row">
               <div class="form-group flex-1">
                 <label for="material-category">Material Category</label>
-                <select id="material-category" v-model="category" class="form-control">
+                <select id="material-category" v-model="category" class="form-control" :disabled="props.hasPurchaseRequests">
                   <option v-for="item in categories" :key="item" :value="item">{{ item }}</option>
                 </select>
               </div>
@@ -277,13 +341,30 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeyDown))
             </div>
 
             <div class="form-group">
-              <label>Images</label>
-              <button type="button" class="upload-placeholder" @click="triggerFileInput">
-                <ImagePlus :size="22" color="#778732" />
-                <span>{{ imageFiles.length ? `${imageFiles.length} image(s) selected` : 'Add photos of your materials' }}</span>
-                <small>PNG or JPG</small>
-              </button>
-              <input ref="fileInputRef" class="hidden-input" type="file" accept="image/png,image/jpeg" multiple @change="handleFileUpload" />
+              <label>Photos</label>
+              <div class="photo-grid">
+                <button type="button" class="upload-box" @click="triggerFileInput">
+                  <ImagePlus :size="24" color="#8F9A8F" />
+                  <span>Upload</span>
+                  <input ref="fileInputRef" class="hidden-input" type="file" accept="image/png,image/jpeg" multiple @change="handleFileUpload" />
+                </button>
+
+                <!-- Existing Images -->
+                <div v-for="(img, idx) in existingImages" :key="img.id" class="thumbnail-box">
+                  <img :src="img.image_url" alt="preview" />
+                  <button type="button" class="delete-photo-btn" @click="removeExistingImage(idx)">
+                    <X :size="10" color="white" stroke-width="3" />
+                  </button>
+                </div>
+
+                <!-- New Upload Previews -->
+                <div v-for="(imgUrl, idx) in imagePreviews" :key="'new-'+idx" class="thumbnail-box">
+                  <img :src="imgUrl" alt="preview" />
+                  <button type="button" class="delete-photo-btn" @click="removeNewImage(idx)">
+                    <X :size="10" color="white" stroke-width="3" />
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -412,6 +493,13 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeyDown))
 .upload-placeholder { width: 100%; min-height: 76px; padding: 14px; border: 1px dashed #aeb9a2; border-radius: 10px; background: #f7f8f6; color: #697067; display: flex; align-items: center; justify-content: center; gap: 9px; font: inherit; cursor: pointer; }
 .upload-placeholder small { color: #8a9388; }
 .hidden-input { display: none; }
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.upload-box { height: 96px; background: #f7f8f6; border: 1px dashed #e4e7e3; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: background 0.15s ease; }
+.upload-box:hover { background: #edf0ec; }
+.upload-box span { font-size: 11px; font-weight: 500; color: #8f9a8f; }
+.thumbnail-box { position: relative; height: 96px; border-radius: 8px; overflow: hidden; border: 1px solid #e4e7e3; }
+.thumbnail-box img { width: 100%; height: 100%; object-fit: cover; }
+.delete-photo-btn { position: absolute; top: 6px; right: 6px; width: 20px; height: 20px; background: rgba(26, 29, 26, 0.8); border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .footer-actions { gap: 12px; margin-top: 8px; justify-content: flex-end; }
 .btn-cancel,
 .btn-submit { padding: 12px 24px; border-radius: 24px; font: inherit; font-weight: 700; cursor: pointer; text-align: center; }

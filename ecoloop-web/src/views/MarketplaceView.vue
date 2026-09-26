@@ -169,27 +169,38 @@ async function refreshListings() {
 .marketplace-categories {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 16px 0;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
   max-width: 1200px;
   margin: 0 auto;
 }
 
 .category-pill {
-  padding: 6px 14px;
-  border-radius: 20px;
-  border: 1px solid #e4e7e3;
-  background: #ffffff;
-  color: #525a52;
+  padding: 8px 20px;
+  border-radius: 24px;
+  border: 1.5px solid transparent;
+  background: #f0f2ef;
+  color: #3f463f;
   font-family: 'Outfit', sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
+  letter-spacing: 0.3px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.category-pill:hover { background: #f0f4ea; border-color: #778732; }
-.category-pill--active { background: #778732; border-color: #778732; color: #ffffff; }
+.category-pill:hover { 
+  background: #e4e7e3; 
+  transform: translateY(-1px);
+}
+
+.category-pill--active { 
+  background: #778732; 
+  color: #ffffff; 
+  box-shadow: 0 4px 12px rgba(119, 135, 50, 0.25);
+  transform: translateY(-1px);
+}
 
 .events-list-page {
   display: flex;
@@ -200,22 +211,25 @@ async function refreshListings() {
 
 .events-list-page h2 {
   font-family: 'Outfit', sans-serif;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: #1a1d1a;
   margin: 0;
+  padding-left: 8px;
 }
 
 .events-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
   width: 100%;
 }
 
 .not-found-state {
   text-align: center;
   padding: 48px 16px;
+  color: #525a52;
+  font-family: 'Outfit', sans-serif;
+  font-size: 15px;
 }
-
 </style>

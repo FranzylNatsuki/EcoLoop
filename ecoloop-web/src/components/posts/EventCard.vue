@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { EventItem } from '../../types/event'
 import { useRouter } from 'vue-router'
 
@@ -33,8 +33,16 @@ const formattedSchedule = computed(() => {
   }).format(date)
 })
 
-function handleShare() {
-  emit('share', props.event.id)
+const showShareToast = ref(false)
+async function handleShare() {
+  const url = `${window.location.origin}/events/${props.event.id}`
+  try {
+    await navigator.clipboard.writeText(url)
+    showShareToast.value = true
+    setTimeout(() => { showShareToast.value = false }, 2500)
+  } catch (err) {
+    console.error('Failed to copy link:', err)
+  }
 }
 
 function handleImageError(event: Event) {
@@ -61,16 +69,6 @@ function handleImageError(event: Event) {
           {{ event.category }}
         </span>
       </div>
-
-      <button type="button" class="share-btn" @click.stop="handleShare" aria-label="Share event">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="18" cy="5" r="3" />
-          <circle cx="6" cy="12" r="3" />
-          <circle cx="18" cy="19" r="3" />
-          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-          <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-        </svg>
-      </button>
     </div>
 
     <h3 class="event-title">{{ event.event_title }}</h3>
@@ -107,15 +105,22 @@ function handleImageError(event: Event) {
     </div>
 
     <div class="card-footer">
-      <button type="button" class="join-btn" @click="goToEvent">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-          <circle cx="8.5" cy="7" r="4" />
-          <line x1="20" y1="8" x2="20" y2="14" />
-          <line x1="23" y1="11" x2="17" y2="11" />
+      <button type="button" class="share-action-btn" @click.stop="handleShare">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>
+          <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
         </svg>
-        <span> Join Event </span>
+        <span>Share</span>
       </button>
+
+      <button type="button" class="join-btn" @click.stop="goToEvent">
+        <span>Join Event</span>
+      </button>
+    </div>
+
+    <!-- Share Toast -->
+    <div v-if="showShareToast" class="share-toast">
+      Link Copied to Clipboard
     </div>
   </article>
 </template>
@@ -257,29 +262,76 @@ function handleImageError(event: Event) {
 .card-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding-top: 4px;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid #f0f2ef;
+}
+
+.share-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #f7f8f6;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #525a52;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.share-action-btn:hover {
+  background: #e4e7e3;
+  color: #1a1d1a;
 }
 
 .join-btn {
-  width: 100%;
-  padding: 12px 20px;
-  background: #778732;
+  height: 32px;
+  padding: 0 50px;
+  background: #617024;
   border: none;
-  border-radius: 24px;
-  display: flex;
+  border-radius: 8px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   color: #ffffff;
   font-family: 'Outfit', sans-serif;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
 }
 
 .join-btn:hover {
-  background: #65732a;
+  background: #4f5b1d;
+}
+
+.share-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1d1a;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: fadeInOut 2.5s ease-in-out forwards;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, 20px); }
+  15% { opacity: 1; transform: translate(-50%, 0); }
+  85% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -20px); }
 }
 </style>

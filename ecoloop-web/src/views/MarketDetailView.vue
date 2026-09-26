@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { Share2, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { supabase } from '../composables/useAuth'
 import PageLayout from '../components/layout/PageLayout.vue'
 import BackButton from '../components/common/BackButton.vue'
@@ -39,6 +40,8 @@ const selectedMaterial = ref('')
 const requestedQuantity = ref(1)
 const showEditModal = ref(false)
 const showManageModal = ref(false)
+const currentImageIndex = ref(0)
+const showShareToast = ref(false)
 const isUpdatingListing = ref(false)
 const isLoading = ref(true)
 const isSubmittingComment = ref(false)
@@ -85,6 +88,11 @@ async function fetchPostDetails() {
     .from(tableName)
     .select(`
       *,
+      images:marketplace_listing_images (
+        id,
+        image_url,
+        display_order
+      ),
       author:profiles!author_id (
         full_name,
         created_at,
@@ -320,17 +328,20 @@ async function handleEditListing(payload: any) {
   isUpdatingListing.value = true
   try {
     const hasRequests = purchaseRequests.value.length > 0
-    const updates = hasRequests
+    const updates: any = hasRequests
       ? { description: payload.description }
       : {
           title: payload.title,
           description: payload.description,
           category: payload.category,
-          pricing_type: payload.pricing_type,
-          pricing_structure: payload.pricing_structure,
+          pricing_type: payload.pricingType,
+          pricing_structure: payload.pricingStructure,
           price: payload.price,
           quantity: payload.quantity,
-          quantity_unit: payload.quantity_unit
+          quantity_unit: payload.quantityUnit,
+          location_address: payload.location_address,
+          latitude: payload.latitude,
+          longitude: payload.longitude
         }
 
     const { error: updateError } = await supabase
@@ -340,7 +351,39 @@ async function handleEditListing(payload: any) {
 
     if (updateError) throw updateError
 
-    post.value = { ...post.value, ...updates }
+    // Handle new images if uploaded
+    const retainedUrls = payload.retained_images ? payload.retained_images.map((img: any) => img.image_url) : []
+    const newImageUrls: string[] = []
+
+    if (payload.images && payload.images.length > 0) {
+      for (const file of payload.images) {
+        const filePath = `marketplace/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`
+        const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file)
+        if (!uploadError) {
+          const { data } = supabase.storage.from('images').getPublicUrl(filePath)
+          newImageUrls.push(data.publicUrl)
+        }
+      }
+    }
+
+    const finalUrls = [...retainedUrls, ...newImageUrls]
+
+    // Always delete old image records
+    await supabase.from('marketplace_listing_images').delete().eq('listing_id', post.value.id)
+
+    // Insert final combined image records
+    if (finalUrls.length > 0) {
+      const imageRecords = finalUrls.map((url, idx) => ({
+        listing_id: post.value.id,
+        image_url: url,
+        display_order: idx
+      }))
+      await supabase.from('marketplace_listing_images').insert(imageRecords)
+    }
+
+    // Refresh everything
+    await fetchPostDetails()
+
     showEditModal.value = false
     showManageModal.value = false
   } catch (err: any) {
@@ -450,6 +493,29 @@ const materialOptions = computed(() => {
     unit: material.unit
   }))
 })
+
+function nextImage() {
+  if (post.value?.images && currentImageIndex.value < post.value.images.length - 1) {
+    currentImageIndex.value++
+  }
+}
+
+function prevImage() {
+  if (currentImageIndex.value > 0) {
+    currentImageIndex.value--
+  }
+}
+
+async function handleShare() {
+  const url = window.location.href
+  try {
+    await navigator.clipboard.writeText(url)
+    showShareToast.value = true
+    setTimeout(() => { showShareToast.value = false }, 2500)
+  } catch (err) {
+    console.error('Failed to copy link:', err)
+  }
+}
 </script>
 
 <template>
@@ -474,24 +540,61 @@ const materialOptions = computed(() => {
               · {{ new Date(post.created_at).toLocaleDateString() }}
             </p>
           </div>
-          <button
-            class="buy-button"
-            :class="{ 'buy-button-disabled': post.status === 'sold' && !isOwner }"
-            type="button"
-            :disabled="isBuyButtonDisabled"
-            @click="isOwner ? (showManageModal = true) : handleBuyOrRequest()"
-          >
-            {{ buyButtonText }}
-        </button>
+          <div class="action-buttons">
+            <button
+              class="buy-button"
+              :class="{ 'buy-button-disabled': post.status === 'sold' && !isOwner }"
+              type="button"
+              :disabled="isBuyButtonDisabled"
+              @click="isOwner ? (showManageModal = true) : handleBuyOrRequest()"
+            >
+              {{ buyButtonText }}
+            </button>
+            <button class="share-button-icon" @click="handleShare" aria-label="Share listing">
+              <Share2 :size="18" />
+            </button>
+          </div>
         </div>
 
-        <div v-if="post.images?.length" class="image-gallery">
-          <img
-            v-for="(image, index) in post.images"
-            :key="image.id || index"
-            :src="image.image_url || image"
-            :alt="post.title"
-          />
+        <!-- Share Toast -->
+        <div v-if="showShareToast" class="share-toast">
+          Link Copied to Clipboard
+        </div>
+
+        <div v-if="post.images?.length" class="carousel-container">
+          <div class="carousel-inner">
+            <img
+              :src="post.images[currentImageIndex].image_url || post.images[currentImageIndex]"
+              :alt="post.title"
+              class="carousel-image"
+            />
+
+            <!-- Controls -->
+            <button
+              v-if="post.images.length > 1 && currentImageIndex > 0"
+              class="carousel-btn prev"
+              @click="prevImage"
+            >
+              <ChevronLeft :size="24" />
+            </button>
+            <button
+              v-if="post.images.length > 1 && currentImageIndex < post.images.length - 1"
+              class="carousel-btn next"
+              @click="nextImage"
+            >
+              <ChevronRight :size="24" />
+            </button>
+          </div>
+
+          <!-- Indicators -->
+          <div v-if="post.images.length > 1" class="carousel-indicators">
+            <span
+              v-for="(_, idx) in post.images"
+              :key="idx"
+              class="dot"
+              :class="{ active: currentImageIndex === Number(idx) }"
+              @click="currentImageIndex = Number(idx)"></span>
+          </div>
         </div>
 
         <p class="listing-description">{{ post.description }}</p>
@@ -681,9 +784,27 @@ const materialOptions = computed(() => {
 .category-label { color: #778732; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 h1 { margin: 8px 0; color: #1a1d1a; }
 .listing-meta, .muted-text { color: #8f9a8f; font-size: 13px; }
+.action-buttons { display: flex; align-items: center; gap: 8px; }
 .buy-button { flex-shrink: 0; border: none; border-radius: 8px; background: #778732; color: #fff; padding: 11px 16px; font-weight: 700; cursor: pointer; }
-.image-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 18px 0; }
-.image-gallery img { width: 100%; height: 180px; border-radius: 8px; object-fit: cover; }
+.share-button-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid #e4e7e3; border-radius: 8px; background: #fff; color: #525a52; cursor: pointer; transition: all 0.2s ease; }
+.share-button-icon:hover { background: #f0f4ea; border-color: #778732; color: #778732; }
+
+/* Share Toast */
+.share-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1d1a; color: #fff; padding: 10px 20px; border-radius: 8px; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 500; z-index: 9999; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); animation: fadeInOut 2.5s ease-in-out forwards; }
+@keyframes fadeInOut { 0% { opacity: 0; transform: translate(-50%, 20px); } 15% { opacity: 1; transform: translate(-50%, 0); } 85% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; transform: translate(-50%, -20px); } }
+
+/* Carousel */
+.carousel-container { position: relative; margin: 18px 0; display: flex; flex-direction: column; gap: 12px; }
+.carousel-inner { position: relative; width: 100%; height: 350px; border-radius: 12px; overflow: hidden; background: #f7f8f6; }
+.carousel-image { width: 100%; height: 100%; object-fit: contain; }
+.carousel-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.8); border: none; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #1a1d1a; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: background 0.2s; }
+.carousel-btn:hover { background: #fff; }
+.carousel-btn.prev { left: 12px; }
+.carousel-btn.next { right: 12px; }
+.carousel-indicators { display: flex; justify-content: center; gap: 8px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #d9ded7; cursor: pointer; transition: background 0.2s; }
+.dot.active { background: #778732; }
+
 .listing-description { white-space: pre-wrap; line-height: 1.6; color: #3f463f; }
 .listing-details { display: grid; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #e4e7e3; color: #525a52; }
 .section-header h2 { margin: 0 0 4px; color: #1a1d1a; }

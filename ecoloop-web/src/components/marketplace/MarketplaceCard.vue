@@ -41,6 +41,18 @@ function handleListingAction(event: MouseEvent) {
   else emit('request-buy', listingData.value)
 }
 
+const showShareToast = ref(false)
+async function handleShare() {
+  const url = `${window.location.origin}/post/${listingData.value?.id || ''}`
+  try {
+    await navigator.clipboard.writeText(url)
+    showShareToast.value = true
+    setTimeout(() => { showShareToast.value = false }, 2500)
+  } catch (err) {
+    console.error('Failed to copy link:', err)
+  }
+}
+
 const coverImage = computed(() =>
   listingData.value?.images?.[0]?.image_url || 'https://placehold.co/400x300'
 )
@@ -103,13 +115,28 @@ const getCategoryStyle = (category?: string) => {
         </div>
       </div>
 
-      <button
-        type="button"
-        class="listing-action"
-        @click="handleListingAction"
-      >
-        {{ isOwner ? 'Manage Listing' : 'Request to Buy' }}
-      </button>
+      <div class="card-footer-actions">
+        <button type="button" class="share-action-btn" @click.stop="handleShare">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+          <span>Share</span>
+        </button>
+
+        <button
+          type="button"
+          class="listing-action"
+          @click="handleListingAction"
+        >
+          {{ isOwner ? 'Manage Listing' : 'Request to Buy' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Share Toast -->
+    <div v-if="showShareToast" class="share-toast">
+      Link Copied to Clipboard
     </div>
   </div>
 </template>
@@ -130,7 +157,7 @@ const getCategoryStyle = (category?: string) => {
 }
 
 .image-container {
-  height: 190px;
+  aspect-ratio: 1 / 1;
   position: relative;
   width: 100%;
 }
@@ -219,20 +246,80 @@ const getCategoryStyle = (category?: string) => {
   color: #8F9A8F;
 }
 
+.card-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 14px;
+  border-top: 1px solid #E4E7E3;
+}
+
+.share-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #f7f8f6;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #525a52;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.share-action-btn:hover {
+  background: #e4e7e3;
+  color: #1a1d1a;
+}
+
 .listing-action {
-  width: 100%;
+  height: 32px;
+  padding: 0 50px;
+  background: #617024;
   border: none;
   border-radius: 8px;
-  padding: 10px 12px;
-  background: #778732;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   color: #ffffff;
+  font-family: 'Outfit', sans-serif;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.2s ease;
 }
 
 .listing-action:hover {
-  background: #657329;
+  background: #4f5b1d;
+}
+
+.share-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1a1d1a;
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: fadeInOut 2.5s ease-in-out forwards;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translate(-50%, 20px); }
+  15% { opacity: 1; transform: translate(-50%, 0); }
+  85% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -20px); }
 }
 
 
