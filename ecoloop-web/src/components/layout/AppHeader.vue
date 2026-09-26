@@ -6,10 +6,11 @@ import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '../../composables/useAuth'
 import NotificationDropdown from './NotificationDropdown.vue'
 import { useSearch } from '../../composables/useSearch'
+import { useNotifications } from '../../composables/useNotifications'
 
 const isNotifOpen = ref(false)
-const hasUnread = ref(false)
 const router = useRouter()
+const { fetchNotifications, hasUnread } = useNotifications()
 const isDropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const notifDropdownRef = ref<HTMLElement | null>(null)
@@ -24,6 +25,7 @@ const {
 } = useSearch()
 
 onMounted(async () => {
+  fetchNotifications()
   document.addEventListener('click', handleClickOutside)
 
   const { data: { session } } = await supabase.auth.getSession()

@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { Check, Package, X } from 'lucide-vue-next'
 import { supabase } from '../../composables/useAuth'
+import { useToast } from '../../composables/useToast'
 
 interface MaterialOption {
   name?: string
@@ -30,6 +31,7 @@ const requestedQuantity = ref(1)
 const messageText = ref('')
 const pickupPreference = ref('pickup')
 const isSubmitting = ref(false)
+const { addToast } = useToast()
 
 const availableMaterials = computed<MaterialOption[]>(() => {
   const source = props.post?.materials || props.post?.material_type
@@ -114,6 +116,7 @@ ${messageText.value}`;
     if (error) throw error
 
     console.log('Purchase request created successfully:', data)
+    addToast('Purchase request sent to the seller!', 'success')
     emit('submit', data)
     emit('update:modelValue', false)
   } catch (error) {

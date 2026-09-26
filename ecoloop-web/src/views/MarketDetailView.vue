@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
 import { Share2, ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import { supabase } from '../composables/useAuth'
+import { useToast } from '../composables/useToast'
 import PageLayout from '../components/layout/PageLayout.vue'
 import BackButton from '../components/common/BackButton.vue'
 import L from 'leaflet'
@@ -66,6 +67,7 @@ const isLoading = ref(true)
 const isSubmittingComment = ref(false)
 const isLoadingRequests = ref(false)
 const isUpdatingRequest = ref(false)
+const { addToast } = useToast()
 
 const mapContainer = ref<HTMLElement | null>(null)
 let requestMapInstance: L.Map | null = null
@@ -492,10 +494,11 @@ async function handleAcceptRequest() {
     }
 
     await fetchPurchaseRequests()
+    addToast('Request accepted successfully!', 'success')
     selectedRequest.value = null
   } catch (err: any) {
     console.error('Failed to accept purchase request:', err)
-    alert('Failed to accept request: ' + (err.message || 'Unknown error'))
+    addToast('Failed to accept request', 'error')
   } finally {
     isUpdatingRequest.value = false
   }
@@ -514,10 +517,11 @@ async function handleRejectRequest() {
     if (requestError) throw requestError
 
     await fetchPurchaseRequests()
+    addToast('Request accepted successfully!', 'success')
     selectedRequest.value = null
   } catch (err: any) {
     console.error('Failed to reject purchase request:', err)
-    alert('Failed to reject request: ' + (err.message || 'Unknown error'))
+    addToast('Failed to reject request', 'error')
   } finally {
     isUpdatingRequest.value = false
   }
