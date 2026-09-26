@@ -85,28 +85,27 @@ const heroStyle = computed(() => {
   <section class="event-hero" :style="heroStyle">
     <div class="event-hero-content">
       <div class="event-hero-info">
-        <div class="hero-badges">
-          <span class="event-badge">
-            {{ event.category || 'Featured Global Event' }}
-          </span>
-          <button 
-            type="button" 
-            class="notify-btn" 
-            :class="{ active: isFollowing }"
-            :disabled="isUpdating"
-            @click.stop="handleToggleFollow"
-          >
-            <CheckCircle2 v-if="isFollowing" :size="14" />
-            <BellRing v-else :size="14" />
-            <span>{{ isFollowing ? 'Following' : 'Be Notified' }}</span>
-          </button>
-        </div>
+        <span class="event-badge">
+          {{ event.category || 'Featured Global Event' }}
+        </span>
 
         <h1>{{ event.event_title }}</h1>
         <p>{{ event.description }}</p>
       </div>
 
-      <div class="event-countdown">
+      <div class="hero-right-area">
+        <button 
+          class="circular-notify-btn" 
+          :class="{ active: isFollowing }"
+          :disabled="isUpdating"
+          @click.stop="handleToggleFollow"
+          :title="isFollowing ? 'Following event' : 'Follow to be notified'"
+        >
+          <CheckCircle2 v-if="isFollowing" :size="20" stroke-width="2.5" />
+          <BellRing v-else :size="20" stroke-width="2.5" />
+        </button>
+
+        <div class="event-countdown">
         <span class="countdown-title">Time Remaining</span>
 
         <div class="countdown-boxes">
@@ -130,6 +129,8 @@ const heroStyle = computed(() => {
             <span>SECS</span>
           </div>
         </div>
+      </div>
+      
       </div>
     </div>
   </section>
@@ -159,12 +160,7 @@ const heroStyle = computed(() => {
   max-width: 680px;
 }
 
-.hero-badges { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
-.notify-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s; backdrop-filter: blur(4px); }
-.notify-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.25); border-color: rgba(255,255,255,0.4); }
-.notify-btn.active { background: rgba(119, 135, 50, 0.9); border-color: #778732; }
-.event-badge { margin-bottom: 0; 
-
+.event-badge { 
   display: inline-block;
   background: #ca8a04;
   color: #ffffff;
@@ -175,6 +171,40 @@ const heroStyle = computed(() => {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 16px;
+}
+
+.hero-right-area {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.circular-notify-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.circular-notify-btn:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.circular-notify-btn.active {
+  background: rgba(119, 135, 50, 0.85);
+  border-color: #778732;
+  color: #ffffff;
 }
 
 .event-hero-info h1 {
@@ -244,6 +274,11 @@ const heroStyle = computed(() => {
 }
 
 @media (max-width: 900px) {
+  .hero-right-area {
+    width: 100%;
+    justify-content: space-between;
+    align-items: flex-end;
+  }
   .event-hero-content {
     flex-direction: column;
     align-items: flex-start;
