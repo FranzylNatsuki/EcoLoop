@@ -28,6 +28,7 @@ const dialogRef = ref<HTMLDialogElement | null>(null)
 const selectedMaterial = ref('')
 const requestedQuantity = ref(1)
 const messageText = ref('')
+const pickupPreference = ref('pickup')
 const isSubmitting = ref(false)
 
 const availableMaterials = computed<MaterialOption[]>(() => {
@@ -87,11 +88,19 @@ async function submit() {
     }
 
     const currentUserId = session.user.id
+    let finalNotes = `Preference: ${pickupPreference.value}`;
+    if (messageText.value) {
+      finalNotes += `
+
+Buyer Notes:
+${messageText.value}`;
+    }
+
     const payload = {
       post_id: props.post.id,
       seller_id: sellerId,
       buyer_id: currentUserId,
-      notes: messageText.value,
+      notes: finalNotes,
       status: 'pending'
     }
 
@@ -140,6 +149,27 @@ async function submit() {
           <span class="summary-badge">{{ post?.category || 'Marketplace' }}</span>
           <strong>{{ post?.title || 'Marketplace listing' }}</strong>
           <p>{{ post?.description }}</p>
+        </div>
+
+        <div class="form-group radio-section">
+          <span class="field-label">Delivery Preference</span>
+          <div class="radio-group">
+            <label class="radio-option" :class="{ active: pickupPreference === 'pickup' }">
+              <input type="radio" v-model="pickupPreference" value="pickup" class="sr-only" />
+              <span class="radio-dot"></span>
+              <span class="option-label">I will pick it up</span>
+            </label>
+            <label class="radio-option" :class="{ active: pickupPreference === 'deliver' }">
+              <input type="radio" v-model="pickupPreference" value="deliver" class="sr-only" />
+              <span class="radio-dot"></span>
+              <span class="option-label">Please deliver to me</span>
+            </label>
+            <label class="radio-option" :class="{ active: pickupPreference === 'meetup' }">
+              <input type="radio" v-model="pickupPreference" value="meetup" class="sr-only" />
+              <span class="radio-dot"></span>
+              <span class="option-label">Meet at public place</span>
+            </label>
+          </div>
         </div>
 
         <div class="form-grid">
@@ -204,4 +234,16 @@ async function submit() {
 .btn-submit { border: 1px solid #778732; background: #778732; color: #fff; }
 .btn-cancel { border: 1px solid #d9ded7; background: #fff; color: #1a1d1a; }
 @media (max-width: 560px) { .materials-modal-card { padding: 20px; } .form-grid { grid-template-columns: 1fr; } }
+
+.radio-section { margin-top: 16px; margin-bottom: 8px; }
+.radio-group { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.radio-option { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #d9ded7; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
+.radio-option:hover { background: #f9fafb; }
+.radio-option.active { border-color: #778732; background: #fbfdf9; }
+.radio-dot { width: 18px; height: 18px; border: 2px solid #9ca3af; border-radius: 50%; position: relative; }
+.radio-option.active .radio-dot { border-color: #778732; }
+.radio-option.active .radio-dot::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: #778732; border-radius: 50%; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
+@media (min-width: 480px) { .radio-group { flex-direction: row; } .radio-option { flex: 1; justify-content: center; padding: 12px; } }
 </style>
+
