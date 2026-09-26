@@ -24,7 +24,7 @@ function handleSortClick(label: string) {
   setSort(label)
 
   // Allow sorting to happen in place on home, root, and marketplace
-  const allowedSortPaths = ['/home', '/', '/marketplace']
+  const allowedSortPaths = ['/home', '/', '/marketplace', '/events']
   if (!allowedSortPaths.includes(route.path)) {
     router.push('/home')
   }
@@ -42,7 +42,7 @@ function handleSortClick(label: string) {
       :key="item.label"
       class="nav-item"
       :class="{
-        'nav-item--active': selectedSort === item.label && ['/home', '/', '/marketplace'].includes(route.path)
+        'nav-item--active': selectedSort === item.label && ['/home', '/', '/marketplace', '/events'].includes(route.path)
       }"
       @click="handleSortClick(item.label)"
     >

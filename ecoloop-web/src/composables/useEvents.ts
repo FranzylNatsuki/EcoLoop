@@ -102,19 +102,19 @@ export function useEvents() {
   function transformSupabaseToEventItem(row: any): EventItem {
     const donatedItems = Number(row.donated_items || 0)
 
-      // 1. Calculate total goal from materials_needed array
-      const rawMaterials = Array.isArray(row.materials_needed) ? row.materials_needed : []
-      const computedTarget = rawMaterials.reduce(
-        (sum: number, mat: any) => sum + (Number(mat.target) || 0),
-        0
-      )
+    // 1. Calculate total goal from materials_needed array
+    const rawMaterials = Array.isArray(row.materials_needed) ? row.materials_needed : []
+    const computedTarget = rawMaterials.reduce(
+      (sum: number, mat: any) => sum + (Number(mat.target) || 0),
+      0
+    )
 
     const targetItems = Number(row.target_items) || computedTarget
 
-      // 2. Compute percentage accurately
-      const fulfillmentPercent = targetItems > 0
-        ? Math.min(100, Math.round((donatedItems / targetItems) * 100))
-        : (row.fulfillment_percent || 0)
+    // 2. Compute percentage accurately
+    const fulfillmentPercent = targetItems > 0
+      ? Math.min(100, Math.round((donatedItems / targetItems) * 100))
+      : (row.fulfillment_percent || 0)
 
     const eventDate = new Date(row.event_date || row.schedule || Date.now())
     const diffTime = eventDate.getTime() - Date.now()
@@ -362,7 +362,7 @@ export function useEvents() {
           time: 'Top Contributor'
         }))
 
-      // --- D. Fetch Single Event Donated Total ---
+      // --- D. Fetch Single Event Donated Total & Related Events ---
       const { data: totalRow } = await supabase
         .from('event_funding_totals')
         .select('donated_items')
@@ -371,19 +371,58 @@ export function useEvents() {
 
       const donatedItems = calculatedTotalDonated > 0 ? calculatedTotalDonated : Number(totalRow?.donated_items || 0)
 
+      // Query only columns that exist on the events table
       const { data: relatedData } = await supabase
         .from('events')
-        .select('id, title, category, banner_url')
+        .select('id, title, category, banner_url, materials_needed')
         .neq('id', id)
         .limit(3)
 
-      const relatedEvents: RelatedEvent[] = (relatedData || []).map((rel: any) => ({
-        id: rel.id,
-        title: rel.title || 'Untitled Event',
-        category: rel.category || 'Community',
-        image: rel.banner_url || 'https://placehold.co/600x360',
-        fulfillment_percent: calculateEventProgress(rel)
-      }))
+      // Fetch pledge totals for related events to calculate progress percentage dynamically
+      const relatedIds = (relatedData || []).map((r: any) => r.id)
+      const relTotalsMap = new Map<string, number>()
+
+      if (relatedIds.length > 0) {
+        const { data: relPledgeItems } = await supabase
+          .from('event_pledge_items')
+          .select(`
+            quantity,
+            pledge:event_pledges!event_pledge_id!inner (
+              event_id
+            )
+          `)
+
+        if (relPledgeItems) {
+          relPledgeItems.forEach((item: any) => {
+            const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
+            const eId = pledge?.event_id
+            if (eId && relatedIds.includes(eId)) {
+              const current = relTotalsMap.get(eId) || 0
+              relTotalsMap.set(eId, current + (Number(item.quantity) || 0))
+            }
+          })
+        }
+      }
+
+      const relatedEvents: RelatedEvent[] = (relatedData || []).map((rel: any) => {
+        const rawMaterials = Array.isArray(rel.materials_needed) ? rel.materials_needed : []
+        const computedTarget = rawMaterials.reduce(
+          (sum: number, mat: any) => sum + (Number(mat.target) || 0),
+          0
+        )
+        const donated = relTotalsMap.get(rel.id) || 0
+        const percent = computedTarget > 0
+          ? Math.min(100, Math.round((donated / computedTarget) * 100))
+          : 0
+
+        return {
+          id: rel.id,
+          title: rel.title || 'Untitled Event',
+          category: rel.category || 'Community',
+          image: rel.banner_url || 'https://placehold.co/600x360',
+          fulfillment_percent: percent
+        }
+      })
 
       const eventItem = transformSupabaseToEventItem({ ...data, donated_items: donatedItems })
 

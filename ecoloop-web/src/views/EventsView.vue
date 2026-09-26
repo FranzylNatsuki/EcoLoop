@@ -1,52 +1,40 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useEvents } from '../composables/useEvents'
+import { useSort } from '../composables/useSort'
 import type { EventItem } from '../types/event'
 
 import CategoryBar from '../components/layout/CategoryBar.vue'
 import PageLayout from '../components/layout/PageLayout.vue'
+import BackButton from '../components/common/BackButton.vue'
+import EventPreview from '../components/sidebar/EventPreview.vue'
+
+// Detail Components
 import EventHero from '../components/events/EventHero.vue'
 import EventStats from '../components/events/EventStats.vue'
 import MaterialsNeededCard from '../components/events/MaterialsNeededCard.vue'
 import RecentDonationsCard from '../components/events/RecentDonationsCard.vue'
 import DonorsLeaderboard from '../components/events/DonorsLeaderboard.vue'
 import RelatedEventsCard from '../components/events/RelatedEventsCard.vue'
-import EventPreview from '../components/sidebar/EventPreview.vue'
 
-// Import Modals
+// Modals
 import DonateEventMaterialsModal from '../components/Modals/DonateEventMaterialsModal.vue'
 import ThankYouDonationModal from '../components/Modals/ThankYouDonationModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const { events, fetchEvents, fetchEventById, loading } = useEvents()
-const event = ref<EventItem | null>(null)
+const { selectedSort } = useSort()
 
-// Modal State Controls
+// Route detection for detail mode vs grid mode
+const eventId = computed(() => route.params.id as string | undefined)
+
+// Detail View State
+const eventDetail = ref<EventItem | null>(null)
+const detailError = ref<string | null>(null)
 const isDonateModalOpen = ref(false)
 const isThankYouModalOpen = ref(false)
-
-// Filtered Events Computed List
-const filteredEvents = computed(() => {
-  // Read category directly from URL query parameter
-  const selected = (route.query.category as string || '').trim().toLowerCase()
-
-  // Return all if no query param or set to 'all'
-  if (!selected || selected === 'all' || selected === 'all categories') {
-    return events.value
-  }
-
-  return events.value.filter((e) => {
-    const eventCat = e.category?.trim().toLowerCase() || ''
-    if (!eventCat) return false
-
-    // Flexible match (e.g. "tree planting" matches "Tree Planting")
-    return eventCat.includes(selected) || selected.includes(eventCat)
-  })
-})
-
-// Payload details for Thank You screen
 const thankYouDetails = ref({
   quantity: 0,
   materialName: '',
@@ -54,130 +42,224 @@ const thankYouDetails = ref({
   authorUsername: ''
 })
 
-async function loadEventData() {
-  const eventId = route.params.id as string | undefined
+// Grid View State
+const userLocation = ref<{ lat: number; lng: number } | null>(null)
+const categories = [
+  { label: 'All', value: '' },
+  { label: 'Volunteering', value: 'Volunteering' },
+  { label: 'Fundraiser', value: 'Fundraiser' },
+  { label: 'Workshop', value: 'Workshop' },
+  { label: 'Clean-up', value: 'Clean-up' },
+  { label: 'Gardening', value: 'Gardening' },
+  { label: 'Crafts & DIY', value: 'Crafts & DIY' },
+]
 
-  if (eventId) {
-    // Single Event Mode (/events/:id)
-    event.value = await fetchEventById(eventId)
+const activeCategory = computed(() => (route.query.category as string) || '')
+
+function setCategory(value: string) {
+  router.push({ path: '/events', query: value ? { category: value } : {} })
+}
+
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * (Math.PI / 180)
+  const dLon = (lon2 - lon1) * (Math.PI / 180)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+const filteredEvents = computed(() => {
+  let result = events.value
+  const selected = activeCategory.value.trim().toLowerCase()
+
+  if (selected && selected !== 'all' && selected !== 'all categories') {
+    result = result.filter((e) => {
+      const eventCat = e.category?.trim().toLowerCase() || ''
+      return eventCat.includes(selected) || selected.includes(eventCat)
+    })
+  }
+
+  if (selectedSort.value) {
+    result = [...result].sort((a, b) => {
+      switch (selectedSort.value) {
+        case 'New':
+          return new Date((b as any).created_at || (b as any).schedule || 0).getTime() - new Date((a as any).created_at || (a as any).schedule || 0).getTime()
+        case 'Hot':
+          return ((b as any).fulfillment_percent || (b as any).likes_count || 0) - ((a as any).fulfillment_percent || (a as any).likes_count || 0)
+        case 'Nearest': {
+          if (!userLocation.value) return 0
+          const latA = (a as any).latitude ?? (a as any).lat
+          const lngA = (a as any).longitude ?? (a as any).lng ?? (a as any).lon
+          const latB = (b as any).latitude ?? (b as any).lat
+          const lngB = (b as any).longitude ?? (b as any).lng ?? (b as any).lon
+
+          const distA = (latA != null && lngA != null) ? calculateDistance(userLocation.value.lat, userLocation.value.lng, Number(latA), Number(lngA)) : Number((a as any).distance) || Infinity
+          const distB = (latB != null && lngB != null) ? calculateDistance(userLocation.value.lat, userLocation.value.lng, Number(latB), Number(lngB)) : Number((b as any).distance) || Infinity
+          return distA - distB
+        }
+        default:
+          return 0
+      }
+    })
+  }
+
+  return result
+})
+
+async function loadPageData() {
+  if (eventId.value) {
+    // Single Event Detail Mode
+    detailError.value = null
+    try {
+      const data = await fetchEventById(eventId.value)
+      if (!data) {
+        detailError.value = 'Event not found or has been removed.'
+      } else {
+        eventDetail.value = data
+      }
+    } catch (err: any) {
+      detailError.value = err.message || 'Failed to load event details.'
+    }
   } else {
-    // All Events Mode (/events)
-    event.value = null
-    await fetchEvents()
+    // Grid List Mode
+    fetchEvents()
   }
-}
-
-function handleOpenDonateModal() {
-  isDonateModalOpen.value = true
-}
-
-async function handleDonationSubmitted(payload: { pledgeId: string; quantity: number; materialName: string }) {
-  if (!event.value) return
-
-  await loadEventData()
-
-  thankYouDetails.value = {
-    quantity: payload.quantity,
-    materialName: payload.materialName,
-    projectName: event.value.event_title,
-    authorUsername: event.value.organizer?.name || 'Campaign Organizer'
-  }
-
-  isDonateModalOpen.value = false
-  isThankYouModalOpen.value = true
 }
 
 function openEventDetail(id: string) {
   router.push(`/events/${id}`)
 }
 
+async function handleDonationSubmitted(payload: { pledgeId: string; quantity: number; materialName: string }) {
+  if (!eventDetail.value) return
+
+  await loadPageData()
+
+  thankYouDetails.value = {
+    quantity: payload.quantity,
+    materialName: payload.materialName,
+    projectName: eventDetail.value.event_title,
+    authorUsername: eventDetail.value.organizer?.name || 'Campaign Organizer'
+  }
+
+  isDonateModalOpen.value = false
+  isThankYouModalOpen.value = true
+}
+
 onMounted(() => {
-  loadEventData()
+  loadPageData()
+
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        userLocation.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      },
+      () => {
+        userLocation.value = { lat: 9.3068, lng: 123.3054 }
+      }
+    )
+  }
 })
 
 watch(
   () => route.params.id,
   () => {
-    loadEventData()
+    loadPageData()
   }
 )
 </script>
 
 <template>
-  <!-- 1. SINGLE EVENT DETAIL VIEW (/events/:id) -->
-  <div v-if="route.params.id" class="event-page-wrapper">
-    <!-- Loading State -->
-    <div v-if="loading" class="loading-state">
-      <p>Loading event details...</p>
+  <!-- 1. SINGLE EVENT DETAIL VIEW -->
+  <template v-if="eventId">
+    <div v-if="loading" class="state-card">Loading event details...</div>
+
+    <div v-else-if="detailError" class="state-card error">
+      <p>{{ detailError }}</p>
+      <button class="btn-back" @click="router.push('/events')">← Back to Events</button>
     </div>
 
-    <div v-else-if="event" class="event-details-container">
-      <EventHero :event="event" @open-donate="handleOpenDonateModal" />
+    <PageLayout v-else-if="eventDetail">
+      <template #main>
+        <BackButton to="/events" label="Back to Events" />
 
-      <div class="event-main-layout">
-        <div class="main-column">
-          <EventStats :stats="event.stats" />
+        <div class="event-details-content">
+          <EventHero :event="eventDetail" @open-donate="isDonateModalOpen = true" />
+          <EventStats :stats="eventDetail.stats" />
 
           <div class="card about-card">
             <h3>About This Project</h3>
-            <p>{{ event.description }}</p>
+            <p class="description-text">{{ eventDetail.description }}</p>
           </div>
 
-          <MaterialsNeededCard :materials="event.materials_needed" @open-donate="handleOpenDonateModal" />
-          <RecentDonationsCard :pledges="event.recent_pledges" />
+          <MaterialsNeededCard :materials="eventDetail.materials_needed" @open-donate="isDonateModalOpen = true" />
+          <RecentDonationsCard :pledges="eventDetail.recent_pledges" />
         </div>
+      </template>
 
-        <aside class="sidebar-column">
-          <div v-if="event.organizer" class="card organizer-card">
-            <h4>Campaign Organizer</h4>
-            <div class="organizer-info">
-              <img :src="event.organizer.avatar" :alt="event.organizer.name" class="organizer-avatar" />
-              <div>
-                <strong>{{ event.organizer.name }}</strong>
-                <p v-if="event.organizer.bio">{{ event.organizer.bio }}</p>
-              </div>
+      <template #sidebar>
+        <div v-if="eventDetail.organizer" class="card organizer-card">
+          <h4>Campaign Organizer</h4>
+          <div class="organizer-info">
+            <img :src="eventDetail.organizer.avatar" :alt="eventDetail.organizer.name" class="organizer-avatar" />
+            <div>
+              <strong>{{ eventDetail.organizer.name }}</strong>
+              <p v-if="eventDetail.organizer.bio" class="organizer-bio">{{ eventDetail.organizer.bio }}</p>
             </div>
           </div>
+        </div>
 
-          <DonorsLeaderboard :donors="event.top_donors" />
-          <RelatedEventsCard :events="event.related_events" />
-        </aside>
-      </div>
+        <DonorsLeaderboard :donors="eventDetail.top_donors" />
+        <RelatedEventsCard :events="eventDetail.related_events" />
+      </template>
+    </PageLayout>
 
-      <!-- Modals -->
-      <DonateEventMaterialsModal
-        v-model="isDonateModalOpen"
-        :post-id="String(event?.id || '')"
-        @submitted="handleDonationSubmitted"
-      />
+    <!-- Modals -->
+    <DonateEventMaterialsModal
+      v-if="eventDetail"
+      v-model="isDonateModalOpen"
+      :post-id="String(eventDetail.id || '')"
+      @submitted="handleDonationSubmitted"
+    />
 
-      <ThankYouDonationModal
-        v-model="isThankYouModalOpen"
-        :quantity="thankYouDetails.quantity"
-        :material-name="thankYouDetails.materialName"
-        :project-name="thankYouDetails.projectName"
-        :author-username="thankYouDetails.authorUsername"
-        @view-donations="router.push({ path: '/profile', query: { tab: 'donations' } })"
-        @back-to-post="isThankYouModalOpen = false"
-      />
-    </div>
+    <ThankYouDonationModal
+      v-model="isThankYouModalOpen"
+      :quantity="thankYouDetails.quantity"
+      :material-name="thankYouDetails.materialName"
+      :project-name="thankYouDetails.projectName"
+      :author-username="thankYouDetails.authorUsername"
+      @view-donations="router.push({ path: '/profile', query: { tab: 'donations' } })"
+      @back-to-post="isThankYouModalOpen = false"
+    />
+  </template>
 
-    <div v-else class="not-found-state">
-      <p>Event not found or failed to load.</p>
-      <button class="btn-back" @click="router.push('/events')">Back to All Events</button>
-    </div>
-  </div>
-
-  <!-- 2. ALL EVENTS LIST VIEW (/events) - Exactly matching HomeView structure -->
+  <!-- 2. ALL EVENTS LIST GRID VIEW -->
   <template v-else>
-  <CategoryBar/>
+    <CategoryBar />
+
+    <nav class="events-categories">
+      <button
+        v-for="cat in categories"
+        :key="cat.label"
+        class="category-pill"
+        :class="{ 'category-pill--active': activeCategory === cat.value }"
+        @click="setCategory(cat.value)"
+      >
+        {{ cat.label }}
+      </button>
+    </nav>
+
     <PageLayout>
       <template #main>
         <div class="events-list-page">
           <h2>Community Events</h2>
 
           <div v-if="filteredEvents.length === 0" class="not-found-state">
-            <p>No events found for this category.</p>
+            <p>No events found{{ activeCategory ? ` in "${activeCategory}"` : '' }}.</p>
           </div>
 
           <div v-else class="events-grid">
@@ -202,7 +284,39 @@ watch(
 </template>
 
 <style scoped>
-/* --- ALL EVENTS FEED STYLES --- */
+/* Grid View Styles */
+.events-categories {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px 16px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.category-pill {
+  padding: 8px 20px;
+  border-radius: 24px;
+  border: 1.5px solid transparent;
+  background: #f0f2ef;
+  color: #3f463f;
+  font-family: 'Outfit', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.category-pill:hover {
+  background: #e4e7e3;
+}
+
+.category-pill--active {
+  background: #778732;
+  color: #ffffff;
+}
+
 .events-list-page {
   display: flex;
   flex-direction: column;
@@ -212,95 +326,91 @@ watch(
 
 .events-list-page h2 {
   font-family: 'Outfit', sans-serif;
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 700;
   color: #1a1d1a;
   margin: 0;
 }
 
-/* Formats event cards as a responsive grid across the main feed area */
 .events-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 24px;
+  width: 100%;
+}
+
+.not-found-state {
+  text-align: center;
+  padding: 48px 16px;
+  color: #525a52;
+}
+
+/* Detail View Styles */
+.event-details-content {
+  display: flex;
+  flex-direction: column;
   gap: 20px;
-  width: 100%;
 }
 
-/* --- SINGLE EVENT DETAIL VIEW STYLES --- */
-.event-page-wrapper {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px 16px;
-  width: 100%;
-}
-
-.organizer-card {
+.card {
   background: #ffffff;
+  border: 1px solid #e4e7e3;
   border-radius: 12px;
-  padding: 24px;
-  border: 1px solid #e2e8f0;
-  overflow: hidden;
+  padding: 20px;
+}
+
+.about-card h3, .organizer-card h4 {
+  margin: 0 0 12px;
+  font-family: 'Outfit', sans-serif;
+  color: #1a1d1a;
+}
+
+.description-text {
+  color: #3f463f;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin: 0;
 }
 
 .organizer-info {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 12px;
 }
 
 .organizer-avatar {
-  width: 48px !important;
-  height: 48px !important;
-  min-width: 48px !important;
-  min-height: 48px !important;
-  max-width: 48px !important;
-  max-height: 48px !important;
-  border-radius: 50% !important;
-  object-fit: cover !important;
-  flex-shrink: 0 !important;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
-.event-details-container {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+.organizer-bio {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #8f9a8f;
 }
 
-.event-main-layout {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 24px;
-}
-
-.main-column {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.sidebar-column {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.about-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 24px;
-}
-
-.loading-state,
-.not-found-state {
+.state-card {
+  max-width: 600px;
+  margin: 80px auto;
+  padding: 32px;
   text-align: center;
-  padding: 48px 16px;
+  color: #666;
 }
 
-@media (max-width: 900px) {
-  .event-main-layout {
-    grid-template-columns: 1fr;
-  }
+.state-card.error {
+  color: #d32f2f;
+}
+
+.btn-back {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: #778732;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
 }
 </style>

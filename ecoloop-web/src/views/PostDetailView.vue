@@ -17,15 +17,13 @@ const postId = route.params.id as string
 
 const authorPostCount = ref(0)
 const post = ref<any>(null)
-const commentsData = ref<any[]>([]) // Changed from computed to a reactive ref
+const commentsData = ref<any[]>([])
 const isLoading = ref(true)
 const isSubmittingComment = ref(false)
 const error = ref<string | null>(null)
 
-// 1. Store the logged-in user's ID
 const myId = ref<string | null>(null)
 
-// 2. Calculate if the active user owns this specific post
 const isOwner = computed(() => {
   if (!myId.value || !post.value?.author_id) return false
   return myId.value === post.value.author_id
@@ -34,7 +32,7 @@ const isOwner = computed(() => {
 async function fetchAuthorPostCount(authorId: string) {
   try {
     const { count, error } = await supabase
-      .from('cause_requests') // Check that this is your actual posts table name
+      .from('cause_requests')
       .select('*', { count: 'exact', head: true })
       .eq('author_id', authorId)
 
@@ -47,7 +45,6 @@ async function fetchAuthorPostCount(authorId: string) {
   }
 }
 
-// 1. Fetch Post Details
 async function fetchPostDetails() {
   try {
     const { data, error: fetchError } = await supabase
@@ -112,27 +109,26 @@ async function fetchComments() {
     if (commentsError) throw commentsError
 
     commentsData.value = data.map((c: any) => {
-          const authorRecord = Array.isArray(c.author) ? c.author[0] : c.author
-          const profileRecord = Array.isArray(authorRecord?.profile_data)
-            ? authorRecord?.profile_data[0]
-            : authorRecord?.profile_data
+      const authorRecord = Array.isArray(c.author) ? c.author[0] : c.author
+      const profileRecord = Array.isArray(authorRecord?.profile_data)
+        ? authorRecord?.profile_data[0]
+        : authorRecord?.profile_data
 
-          return {
-                  id: c.id,
-                  content: c.content,
-                  authorId: c.author_id,
-                  author: authorRecord?.full_name || 'Unknown User',
-                  avatarInitial: (authorRecord?.full_name || 'U').charAt(0).toUpperCase(),
-                  avatarUrl: profileRecord?.Avatar, // Pass the Supabase URL here
-                  timeAgo: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          }
-        })
+      return {
+        id: c.id,
+        content: c.content,
+        authorId: c.author_id,
+        author: authorRecord?.full_name || 'Unknown User',
+        avatarInitial: (authorRecord?.full_name || 'U').charAt(0).toUpperCase(),
+        avatarUrl: profileRecord?.Avatar,
+        timeAgo: new Date(c.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      }
+    })
   } catch (err) {
     console.error('Failed to fetch comments:', err)
   }
 }
 
-// 3. Submit a new comment
 async function handleAddComment(content: string) {
   if (!content.trim()) return
 
@@ -151,7 +147,6 @@ async function handleAddComment(content: string) {
 
     if (insertError) throw insertError
 
-    // Refresh the comments list instantly
     await fetchComments()
   } catch (err) {
     console.error('Failed to post comment:', err)
@@ -159,8 +154,8 @@ async function handleAddComment(content: string) {
     isSubmittingComment.value = false
   }
 }
+
 onMounted(async () => {
-  // Grab the active user session first!
   const { data: { session } } = await supabase.auth.getSession()
   if (session?.user?.id) {
     myId.value = session.user.id
@@ -168,7 +163,6 @@ onMounted(async () => {
 
   await fetchPostDetails()
 
-  // If we successfully loaded the post, fetch the author's true post count
   if (post.value?.author_id) {
     await fetchAuthorPostCount(post.value.author_id)
   }
@@ -177,9 +171,6 @@ onMounted(async () => {
   isLoading.value = false
 })
 
-// --- Computed Properties ---
-
-// Safely sort images by upload order for the header component
 const postImages = computed(() => {
   if (!post.value?.post_images) return []
   return [...post.value.post_images].sort((a, b) => a.display_order - b.display_order)
@@ -230,14 +221,11 @@ const authorProfile = computed(() => {
     : 'Unknown'
 
   return {
-    id: post.value.author_id, // <--- Add this!
+    id: post.value.author_id,
     name: post.value.author.full_name,
     avatar: post.value.author.Avatar || 'https://placehold.co/38x38',
     bio: post.value.author.about,
-
-    // Use our new direct database count!
     postCount: authorPostCount.value,
-
     communityScore: profileRecord?.CommunityScore || 0.0,
     joinedYear: joinedYear
   }
@@ -259,13 +247,11 @@ const relatedPosts = computed(() => [])
   <PageLayout v-else-if="post">
     <template #main>
       <BackButton />
-      <!-- Pass the sorted images along with the post data -->
-      <!-- Pass is-owner down to the header! -->
-            <PostDetailHeader
-              :post="post"
-              :images="postImages"
-              :is-owner="isOwner"
-            />
+      <PostDetailHeader
+        :post="post"
+        :images="postImages"
+        :is-owner="isOwner"
+      />
 
       <PostMaterialList
         :materials="formattedMaterials"
@@ -273,7 +259,6 @@ const relatedPosts = computed(() => [])
         :total-count="formattedMaterials.length"
       />
 
-      <!-- Listen for the submit event from your comment component -->
       <PostCommentSection
         :comments="commentsData"
         :is-submitting="isSubmittingComment"

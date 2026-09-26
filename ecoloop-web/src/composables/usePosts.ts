@@ -69,23 +69,17 @@ export function usePosts() {
         .order('created_at', { ascending: false })
         .limit(limit)
 
-      // Connect the search query to Postgres
-            if (searchQuery && searchQuery.trim().length > 0) {
-              // 1. Strip special characters that could break Postgres syntax
-              // 2. Split words by space
-              const terms = searchQuery.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/)
+      if (searchQuery && searchQuery.trim().length > 0) {
+        const terms = searchQuery.trim().replace(/[^a-zA-Z0-9\s]/g, '').split(/\s+/)
 
-              if (terms.length > 0 && terms[0] !== '') {
-                // 3. Join with '&' and append ':*' to the last word for predictive typing
-                // Example: "glass bot" becomes "glass & bot:*"
-                const formattedQuery = terms.join(' & ') + ':*'
+        if (terms.length > 0 && terms[0] !== '') {
+          const formattedQuery = terms.join(' & ') + ':*'
 
-                query = query.textSearch('fts', formattedQuery, {
-                  config: 'english'
-                  // Notice we removed type: 'websearch' so Postgres respects our & and :* symbols
-                })
-              }
-            }
+          query = query.textSearch('fts', formattedQuery, {
+            config: 'english'
+          })
+        }
+      }
 
       const { data, error } = await query
 
