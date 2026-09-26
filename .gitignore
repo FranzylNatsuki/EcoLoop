@@ -65,3 +65,7 @@ EcoLoop.Api/appsettings.json
 #ecoloop-web/src/components/posts/MarketCard.vue
 #ecoloop-web/src/components/Modals/CreateMarketplaceModal.vue
 #ecoloop-web/src/components/Modals/MarketplaceInquiryModal.vue
+supabase_backup_schema.sql
+sql.txt
+supabase/.temp/
+ecoloop-web/newenv.txt
