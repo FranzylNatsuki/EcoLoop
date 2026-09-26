@@ -87,13 +87,13 @@ function openPost() {
 
       <PostActionsMarket
         v-if="post.type === 'marketplace' || post.postType === 'marketplace' || post.price !== undefined || post.pricingStructure !== undefined"
-        :comments="post.comments || 0"
+        :comments="post.comments || 0" :votes="post.vote_count"
         :post-id="post.id"
         @requestBuy="isInquiryModalOpen = true"
       />
       <PostActions
         v-else
-        :comments="post.comments || 0"
+        :comments="post.comments || 0" :votes="post.vote_count"
         :post-id="post.id"
       />
 
