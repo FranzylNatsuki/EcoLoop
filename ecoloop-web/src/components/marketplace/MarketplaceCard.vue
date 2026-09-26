@@ -234,4 +234,25 @@ const getCategoryStyle = (category?: string) => {
 .listing-action:hover {
   background: #657329;
 }
+
+
+.listing-card {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #E4E7E3;
+  box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  cursor: pointer; /* <--- ADD THIS LINE */
+  transition: transform 0.2s ease, box-shadow 0.2s ease; /* Optional: adds a nice hover effect */
+}
+
+/* Optional: Make it lift up slightly when hovered */
+.listing-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.08);
+}
+
 </style>

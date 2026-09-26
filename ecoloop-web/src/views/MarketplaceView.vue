@@ -1,63 +1,44 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useMarketplace } from '../composables/useMarketplace'
-import type { MarketplaceListing } from '../composables/useMarketplace'
-import { useSort } from '../composables/useSort'
-
-// Layout & Components
-import CategoryBar from '../components/layout/CategoryBar.vue'
 import PageLayout from '../components/layout/PageLayout.vue'
 import BuyRequestModal from '../components/Modals/BuyRequestModal.vue'
 import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
-import CommunityRules from '../components/sidebar/CommunityRules.vue'
+// import CommunityRules from '../components/sidebar/CommunityRules.vue'
+import CategoryBar from '../components/layout/CategoryBar.vue'
+import { useMarketplace } from '../composables/useMarketplace'
+import type { MarketplaceListing } from '../composables/useMarketplace'
+import { useSort } from '../composables/useSort'
 
 const route = useRoute()
 const router = useRouter()
 const { listings, fetchListings } = useMarketplace()
 const { selectedSort } = useSort()
 
-const singleListing = ref<MarketplaceListing | null>(null)
 const selectedListing = ref<MarketplaceListing | null>(null)
 const isBuyRequestModalOpen = ref(false)
+
+// User Location State for the 'Nearest' filter
 const userLocation = ref<{ lat: number; lng: number } | null>(null)
-const loading = ref(false)
-
-// 1. Data Loading Logic (Handles both Single ID and List view)
-async function loadListingData() {
-  loading.value = true
-  const listingId = route.params.id as string | undefined
-
-  if (listingId) {
-    // SINGLE VIEW MODE (/marketplace/:id)
-    if (listings.value.length === 0) await fetchListings()
-    singleListing.value = listings.value.find(l => String(l.id) === listingId) || null
-  } else {
-    // LIST VIEW MODE (/marketplace)
-    singleListing.value = null
-    await fetchListings()
-  }
-  loading.value = false
-}
 
 onMounted(() => {
-  loadListingData()
+  fetchListings()
 
-  // Location for Nearest filter
   if ('geolocation' in navigator) {
     navigator.geolocation.getCurrentPosition(
-      (pos) => userLocation.value = { lat: pos.coords.latitude, lng: pos.coords.longitude },
-      () => userLocation.value = { lat: 9.3068, lng: 123.3054 } // Dumaguete Fallback
+      (pos) => {
+        userLocation.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      },
+      (err) => {
+        console.warn('Geolocation denied or failed, using default location.', err)
+        userLocation.value = { lat: 9.3068, lng: 123.3054 }
+      }
     )
   } else {
     userLocation.value = { lat: 9.3068, lng: 123.3054 }
   }
 })
 
-// Watch for URL ID changes to swap between list/single view
-watch(() => route.params.id, () => loadListingData())
-
-// 2. Sub-Category Filtering Logic
 const categories = [
   { label: 'All', value: '' },
   { label: 'Plastics', value: 'Plastics' },
@@ -77,8 +58,12 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180)
   const dLon = (lon2 - lon1) * (Math.PI / 180)
-  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1*(Math.PI/180)) * Math.cos(lat2*(Math.PI/180)) * Math.sin(dLon/2) * Math.sin(dLon/2)
-  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)))
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
 }
 
 const filteredListings = computed(() => {
@@ -95,8 +80,10 @@ const filteredListings = computed(() => {
   if (selectedSort.value) {
     result = [...result].sort((a, b) => {
       switch (selectedSort.value) {
-        case 'New': return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
-        case 'Hot': return (b.author?.score || 0) - (a.author?.score || 0)
+        case 'New':
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        case 'Hot':
+          return (b.author?.score || 0) - (a.author?.score || 0)
         case 'Nearest':
           if (!userLocation.value) return 0
           const distA = (a.latitude && a.longitude) ? calculateDistance(userLocation.value.lat, userLocation.value.lng, a.latitude, a.longitude) : Infinity
@@ -109,12 +96,11 @@ const filteredListings = computed(() => {
   return result
 })
 
-function openMarketplaceItem(id: string | number) {
-  router.push(`/marketplace/${id}`) // <--- Now pushes to itself with an ID!
-}
-
 function handleMarketplaceEdit(listing: MarketplaceListing | undefined) {
-  if (listing) openMarketplaceItem(listing.id)
+  if (listing) {
+    // This pushes exactly to the route named 'MarketDetail'
+    router.push({ name: 'MarketDetail', params: { id: listing.id } })
+  }
 }
 
 function handleMarketplaceRequest(listing: MarketplaceListing | undefined) {
@@ -130,34 +116,9 @@ async function refreshListings() {
 </script>
 
 <template>
-  <!-- 1. SINGLE LISTING DETAIL VIEW (/marketplace/:id) -->
-  <div v-if="route.params.id" class="event-page-wrapper">
-    <div v-if="loading" class="loading-state">
-      <p>Loading listing details...</p>
-    </div>
-
-    <div v-else-if="singleListing" class="event-details-container">
-      <!-- NOTE: Place your MarketDetail components here, replacing this placeholder -->
-      <div class="card about-card">
-        <h2>{{ singleListing.title }}</h2>
-        <p>{{ singleListing.description }}</p>
-        <button class="btn-back" @click="router.push('/marketplace')" style="margin-top: 20px;">
-          Back to All Listings
-        </button>
-      </div>
-    </div>
-
-    <div v-else class="not-found-state">
-      <p>Listing not found or failed to load.</p>
-      <button class="btn-back" @click="router.push('/marketplace')">Back to All Listings</button>
-    </div>
-  </div>
-
-  <!-- 2. ALL LISTINGS LIST VIEW (/marketplace) -->
-  <template v-else>
+  <div>
     <CategoryBar />
 
-    <!-- Material Sub-categories -->
     <nav class="marketplace-categories">
       <button
         v-for="cat in categories"
@@ -190,18 +151,21 @@ async function refreshListings() {
           </div>
         </div>
       </template>
-    </PageLayout>
-  </template>
 
-  <BuyRequestModal
-    v-model="isBuyRequestModalOpen"
-    :post="selectedListing"
-    @submit="refreshListings"
-  />
+      <!-- Sidebar left blank so Community Rules doesn't show! -->
+      <template #sidebar>
+      </template>
+    </PageLayout>
+
+    <BuyRequestModal
+      v-model="isBuyRequestModalOpen"
+      :post="selectedListing"
+      @submit="refreshListings"
+    />
+  </div>
 </template>
 
 <style scoped>
-/* Marketplace Material Categories */
 .marketplace-categories {
   display: flex;
   flex-wrap: wrap;
@@ -210,6 +174,7 @@ async function refreshListings() {
   max-width: 1200px;
   margin: 0 auto;
 }
+
 .category-pill {
   padding: 6px 14px;
   border-radius: 20px;
@@ -222,16 +187,17 @@ async function refreshListings() {
   cursor: pointer;
   transition: all 0.15s ease;
 }
+
 .category-pill:hover { background: #f0f4ea; border-color: #778732; }
 .category-pill--active { background: #778732; border-color: #778732; color: #ffffff; }
 
-/* Grid Layout matching EventView */
 .events-list-page {
   display: flex;
   flex-direction: column;
   gap: 20px;
   width: 100%;
 }
+
 .events-list-page h2 {
   font-family: 'Outfit', sans-serif;
   font-size: 22px;
@@ -239,6 +205,7 @@ async function refreshListings() {
   color: #1a1d1a;
   margin: 0;
 }
+
 .events-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -246,36 +213,9 @@ async function refreshListings() {
   width: 100%;
 }
 
-/* Single View Layout Matching EventView */
-.event-page-wrapper {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 24px 16px;
-  width: 100%;
-}
-.event-details-container {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.about-card {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 24px;
-}
-.loading-state,
 .not-found-state {
   text-align: center;
   padding: 48px 16px;
 }
-.btn-back {
-  padding: 8px 16px;
-  background: #778732;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 600;
-}
+
 </style>
