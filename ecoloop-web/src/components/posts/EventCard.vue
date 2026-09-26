@@ -2,6 +2,11 @@
 import { computed, ref } from 'vue'
 import type { EventItem } from '../../types/event'
 import { useRouter } from 'vue-router'
+import { BellRing, CheckCircle2 } from 'lucide-vue-next'
+import { supabase } from '../../composables/useAuth'
+import { useEventFollowers } from '../../composables/useEventFollowers'
+import { useToast } from '../../composables/useToast'
+import { onMounted } from 'vue'
 
 const props = defineProps<{
   event: EventItem
@@ -13,6 +18,32 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+const { checkIsFollowing, toggleFollow, isUpdating } = useEventFollowers()
+const { addToast } = useToast()
+
+const isFollowing = ref(false)
+const currentUserId = ref<string | null>(null)
+
+onMounted(async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) {
+    currentUserId.value = session.user.id
+    isFollowing.value = await checkIsFollowing(String(props.event.id), session.user.id)
+  }
+})
+
+async function handleToggleFollow() {
+  if (!currentUserId.value) {
+    addToast('Please login to follow events', 'error')
+    return
+  }
+  const newState = await toggleFollow(String(props.event.id), currentUserId.value, isFollowing.value)
+  isFollowing.value = newState
+  if (newState) {
+    addToast('You will be notified about updates for this event!', 'success')
+  }
+}
+
 function goToEvent() {
   router.push(`/events/${props.event.id}`)
 }
@@ -113,9 +144,21 @@ function handleImageError(event: Event) {
         <span>Share</span>
       </button>
 
-      <button type="button" class="join-btn" @click.stop="goToEvent">
-        <span>Join Event</span>
-      </button>
+      <div class="footer-actions">
+        <button 
+          type="button" 
+          class="follow-btn" 
+          :class="{ active: isFollowing }"
+          @click.stop="handleToggleFollow"
+          :disabled="isUpdating"
+        >
+          <CheckCircle2 v-if="isFollowing" :size="16" />
+          <BellRing v-else :size="16" />
+        </button>
+        <button type="button" class="join-btn" @click.stop="goToEvent">
+          <span>Join Event</span>
+        </button>
+      </div>
     </div>
 
     <!-- Share Toast -->
@@ -288,6 +331,10 @@ function handleImageError(event: Event) {
   color: #1a1d1a;
 }
 
+.footer-actions { display: flex; gap: 8px; }
+.follow-btn { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 20px; background: #f0f2ef; border: 1px solid #d9ded7; color: #525a52; cursor: pointer; transition: all 0.2s; flex-shrink: 0; }
+.follow-btn:hover { background: #e4e7e3; }
+.follow-btn.active { background: rgba(119, 135, 50, 0.1); border-color: #778732; color: #778732; }
 .join-btn {
   height: 32px;
   padding: 0 50px;

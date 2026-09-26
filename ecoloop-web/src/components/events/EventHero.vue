@@ -1,6 +1,36 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { EventItem } from '../../types/event'
+import { BellRing, CheckCircle2 } from 'lucide-vue-next'
+import { supabase } from '../../composables/useAuth'
+import { useEventFollowers } from '../../composables/useEventFollowers'
+import { useToast } from '../../composables/useToast'
+
+const { checkIsFollowing, toggleFollow, isUpdating } = useEventFollowers()
+const { addToast } = useToast()
+
+const isFollowing = ref(false)
+const currentUserId = ref<string | null>(null)
+
+onMounted(async () => {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session) {
+    currentUserId.value = session.user.id
+    isFollowing.value = await checkIsFollowing(String(props.event.id), session.user.id)
+  }
+})
+
+async function handleToggleFollow() {
+  if (!currentUserId.value) {
+    addToast('Please login to follow events', 'error')
+    return
+  }
+  const newState = await toggleFollow(String(props.event.id), currentUserId.value, isFollowing.value)
+  isFollowing.value = newState
+  if (newState) {
+    addToast('You will be notified about updates for this event!', 'success')
+  }
+}
 
 const props = defineProps<{
   event: EventItem
@@ -55,9 +85,22 @@ const heroStyle = computed(() => {
   <section class="event-hero" :style="heroStyle">
     <div class="event-hero-content">
       <div class="event-hero-info">
-        <span class="event-badge">
-          {{ event.category || 'Featured Global Event' }}
-        </span>
+        <div class="hero-badges">
+          <span class="event-badge">
+            {{ event.category || 'Featured Global Event' }}
+          </span>
+          <button 
+            type="button" 
+            class="notify-btn" 
+            :class="{ active: isFollowing }"
+            :disabled="isUpdating"
+            @click.stop="handleToggleFollow"
+          >
+            <CheckCircle2 v-if="isFollowing" :size="14" />
+            <BellRing v-else :size="14" />
+            <span>{{ isFollowing ? 'Following' : 'Be Notified' }}</span>
+          </button>
+        </div>
 
         <h1>{{ event.event_title }}</h1>
         <p>{{ event.description }}</p>
@@ -116,7 +159,12 @@ const heroStyle = computed(() => {
   max-width: 680px;
 }
 
-.event-badge {
+.hero-badges { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.notify-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255,255,255,0.2); color: white; padding: 4px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: all 0.2s; backdrop-filter: blur(4px); }
+.notify-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.25); border-color: rgba(255,255,255,0.4); }
+.notify-btn.active { background: rgba(119, 135, 50, 0.9); border-color: #778732; }
+.event-badge { margin-bottom: 0; 
+
   display: inline-block;
   background: #ca8a04;
   color: #ffffff;
