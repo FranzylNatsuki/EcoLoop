@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { supabase } from '../../composables/useAuth'
 import NotificationItem from './NotificationItem.vue'
 
+
 const notifications = ref<any[]>([])
 const isLoading = ref(true)
 
@@ -23,6 +24,7 @@ onMounted(async () => {
     `)
     .eq('cause_requests.author_id', session.user.id)
 
+  
   const { data: eventPledgesData, error: eventPledgesError } = await supabase
     .from('event_pledges')
     .select(`
@@ -34,6 +36,20 @@ onMounted(async () => {
     `)
     .eq('events.author_id', session.user.id)
 
+  // -- Add Marketplace Purchase Requests Query --
+  const { data: purchaseData, error: purchaseError } = await supabase
+    .from('purchase_requests')
+    .select(`
+      id,
+      created_at,
+      status,
+      buyer_id,
+      post_id,
+      post:marketplace_listings(title)
+    `)
+    .eq('seller_id', session.user.id)
+
+
   let combined: any[] = []
 
   if (pledgesError) {
@@ -43,12 +59,44 @@ onMounted(async () => {
     combined = [...combined, ...p]
   }
 
+  
   if (eventPledgesError) {
     console.error('Error fetching event pledges:', eventPledgesError.message)
   } else if (eventPledgesData) {
     const ep = eventPledgesData.map(n => ({ ...n, pledgeType: 'event' }))
     combined = [...combined, ...ep]
   }
+
+  // Combine Purchase Requests
+  if (purchaseError) {
+    console.error('Error fetching purchase requests:', purchaseError.message)
+  } else if (purchaseData && purchaseData.length > 0) {
+    const buyerIds = [...new Set(purchaseData.map(r => r.buyer_id).filter(Boolean))]
+    let profileMap = new Map()
+
+    if (buyerIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select(`id, full_name`)
+        .in('id', buyerIds)
+
+      if (profiles) {
+        profiles.forEach((p: any) => profileMap.set(p.id, p))
+      }
+    }
+
+    const pr = purchaseData.map(n => {
+      const pPost = Array.isArray(n.post) ? n.post[0] : n.post
+      return {
+        ...n,
+        pledgeType: 'marketplace',
+        post: { title: pPost?.title || 'Unknown Listing' }, // Map expected post title format
+        buyer: profileMap.get(n.buyer_id) || null
+      }
+    })
+    combined = [...combined, ...pr]
+  }
+
 
   combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   notifications.value = combined.slice(0, 10)
