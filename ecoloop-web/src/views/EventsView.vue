@@ -269,7 +269,10 @@ watch(
           <div class="organizer-info">
             <img :src="eventDetail.organizer.avatar" :alt="eventDetail.organizer.name" class="organizer-avatar" />
             <div>
-              <strong>{{ eventDetail.organizer.name }}</strong>
+              <strong style="display: flex; align-items: center; gap: 4px;">
+                {{ eventDetail.organizer.name }}
+                <BadgeCheck v-if="eventDetail.organizer.verified" fill="#3B82F6" color="white" :size="18" />
+              </strong>
               <p v-if="eventDetail.organizer.bio" class="organizer-bio">{{ eventDetail.organizer.bio }}</p>
             </div>
           </div>

@@ -127,6 +127,12 @@ export function useEvents() {
     const authorFullName = rawAuthor?.full_name || 'Community Organizer'
     const authorAvatar = rawProfile?.Avatar || 'https://placehold.co/44x44'
     const authorBio = rawProfile?.about || ''
+    
+    let isVerified = false
+    if (rawAuthor?.is_org && rawAuthor?.organizations) {
+      const org = Array.isArray(rawAuthor.organizations) ? rawAuthor.organizations[0] : rawAuthor.organizations
+      if (org?.verification_status === 'verified') isVerified = true
+    }
 
     return {
       type: 'event',
@@ -147,7 +153,7 @@ export function useEvents() {
         name: authorFullName,
         avatar: authorAvatar,
         bio: authorBio,
-        verified: false
+        verified: isVerified
       },
       stats: {
         days_left: daysLeft,
@@ -168,7 +174,9 @@ export function useEvents() {
           *,
           author:profiles!author_id (
             full_name,
-            profile_data:profile_data_fk ( Avatar, about )
+            is_org,
+            profile_data:profile_data_fk ( Avatar, about ),
+            organizations!organization_id ( verification_status )
           )
         `)
         .order('created_at', { ascending: false })
@@ -243,7 +251,9 @@ export function useEvents() {
           *,
           author:profiles!author_id (
             full_name,
-            profile_data:profile_data_fk ( Avatar, about )
+            is_org,
+            profile_data:profile_data_fk ( Avatar, about ),
+            organizations!organization_id ( verification_status )
           )
         `)
         .eq('id', id)
