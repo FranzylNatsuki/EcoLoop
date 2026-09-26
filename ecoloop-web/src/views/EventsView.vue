@@ -17,15 +17,20 @@ import EventPreview from '../components/sidebar/EventPreview.vue'
 // Import Modals
 import DonateEventMaterialsModal from '../components/Modals/DonateEventMaterialsModal.vue'
 import ThankYouDonationModal from '../components/Modals/ThankYouDonationModal.vue'
+import EditEventModal from '../components/Modals/EditEventModal.vue'
+
+import { supabase } from '../composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
-const { events, fetchEvents, fetchEventById, loading } = useEvents()
+const { events, fetchEvents, fetchEventById, loading, updateEvent } = useEvents()
 const event = ref<EventItem | null>(null)
+const currentUserId = ref<string | null>(null)
 
 // Modal State Controls
 const isDonateModalOpen = ref(false)
 const isThankYouModalOpen = ref(false)
+const isEditModalOpen = ref(false)
 
 // Filtered Events Computed List
 const filteredEvents = computed(() => {
@@ -55,11 +60,16 @@ const thankYouDetails = ref({
 })
 
 async function loadEventData() {
+  const { data: { session } } = await supabase.auth.getSession()
+  currentUserId.value = session?.user?.id || null
+
   const eventId = route.params.id as string | undefined
 
   if (eventId) {
     // Single Event Mode (/events/:id)
     event.value = await fetchEventById(eventId)
+    console.log('Current User ID:', currentUserId.value)
+    console.log('Event Author ID:', event.value?.author_id)
   } else {
     // All Events Mode (/events)
     event.value = null
@@ -67,7 +77,14 @@ async function loadEventData() {
   }
 }
 
-function handleOpenDonateModal() {
+const donatePrefillName = ref('')
+
+function handleOpenDonateModal(materialName?: string) {
+  if (typeof materialName === 'string') {
+    donatePrefillName.value = materialName
+  } else {
+    donatePrefillName.value = ''
+  }
   isDonateModalOpen.value = true
 }
 
@@ -85,6 +102,51 @@ async function handleDonationSubmitted(payload: { pledgeId: string; quantity: nu
 
   isDonateModalOpen.value = false
   isThankYouModalOpen.value = true
+}
+
+async function handleEditEvent(payload: { event: any; materials: any[] }) {
+  if (!event.value?.id) return
+  
+  let finalBannerUrl = payload.event.bannerImage
+
+  if (payload.event.rawFile) {
+    const file = payload.event.rawFile
+    const filePath = `event-banners/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '')}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('images')
+      .upload(filePath, file)
+
+    if (uploadError) {
+      alert('Failed to upload image: ' + uploadError.message)
+      return
+    }
+
+    const { data: publicUrlData } = supabase.storage
+      .from('images')
+      .getPublicUrl(filePath)
+
+    finalBannerUrl = publicUrlData.publicUrl
+  }
+
+  const result = await updateEvent(String(event.value.id), {
+    title: payload.event.title,
+    description: payload.event.description,
+    category: payload.event.category,
+    location: payload.event.location,
+    latitude: payload.event.latitude,
+    longitude: payload.event.longitude,
+    event_date: payload.event.date + 'T' + payload.event.startTime + ':00',
+    banner_url: finalBannerUrl,
+    materials_needed: payload.materials
+  })
+  
+  if (result.success) {
+    isEditModalOpen.value = false
+    await loadEventData()
+  } else {
+    alert('Failed to update event: ' + result.error)
+  }
 }
 
 function openEventDetail(id: string) {
@@ -112,6 +174,12 @@ watch(
     </div>
 
     <div v-else-if="event" class="event-details-container">
+      <div v-if="currentUserId && currentUserId === event.author_id" class="owner-actions">
+        <button class="btn-edit-event" @click="isEditModalOpen = true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+          Edit Event Details
+        </button>
+      </div>
       <EventHero :event="event" @open-donate="handleOpenDonateModal" />
 
       <div class="event-main-layout">
@@ -145,9 +213,15 @@ watch(
       </div>
 
       <!-- Modals -->
+      <EditEventModal
+        v-model="isEditModalOpen"
+        :initial-data="event"
+        @publish="handleEditEvent"
+      />
       <DonateEventMaterialsModal
         v-model="isDonateModalOpen"
         :post-id="String(event?.id || '')"
+        :initial-material-name="donatePrefillName"
         @submitted="handleDonationSubmitted"
       />
 
@@ -227,6 +301,33 @@ watch(
 }
 
 /* --- SINGLE EVENT DETAIL VIEW STYLES --- */
+.owner-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: -10px;
+}
+
+.btn-edit-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #F7F8F6;
+  border: 1px solid #E4E7E3;
+  color: #1A1D1A;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-edit-event:hover {
+  background-color: #E4E7E3;
+  border-color: #778732;
+}
+
 .event-page-wrapper {
   max-width: 1200px;
   margin: 0 auto;

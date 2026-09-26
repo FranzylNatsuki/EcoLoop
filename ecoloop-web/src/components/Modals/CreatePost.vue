@@ -49,7 +49,18 @@ const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: L.Map | null = null
 let markerInstance: L.Marker | null = null
 
-const categories = ['Gardening', 'Upcycling', 'Composting', 'Crafts & DIY', 'Zero Waste']
+const categories = [
+  'Gardening',
+  'Composting',
+  'Upcycling',
+  'Crafts & DIY',
+  'Zero Waste',
+  'E-Waste',
+  'Clean-Up Drive',
+  'Recycling Workshop',
+  'Upcycling Event',
+  'Tree Planting'
+]
 
 function closeModal() {
   if (isSubmitting.value) return

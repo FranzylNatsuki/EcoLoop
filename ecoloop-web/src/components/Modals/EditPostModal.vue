@@ -51,10 +51,15 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const categories = [
   'Gardening',
-  'Upcycling',
   'Composting',
+  'Upcycling',
   'Crafts & DIY',
-  'Zero Waste'
+  'Zero Waste',
+  'E-Waste',
+  'Clean-Up Drive',
+  'Recycling Workshop',
+  'Upcycling Event',
+  'Tree Planting'
 ]
 
 // Fetch existing data

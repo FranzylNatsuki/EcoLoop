@@ -158,11 +158,32 @@ onMounted(async () => {
         items:pledge_items(material_name, quantity, unit)
       `)
       .eq('donor_id', userId)
-      .order('created_at', { ascending: false })
+
+    const { data: eventPledgesData, error: eventPledgesError } = await supabase
+      .from('event_pledges')
+      .select(`
+        *,
+        post:events(title),
+        items:event_pledge_items(material_name, quantity, unit)
+      `)
+      .eq('donor_id', userId)
+
+    let combinedPledges: any[] = []
 
     if (!pledgesError && pledgesData) {
-      userPledges.value = pledgesData
+      const p = pledgesData.map((pl: any) => ({ ...pl, pledgeType: 'cause' }))
+      combinedPledges = [...combinedPledges, ...p]
     }
+    
+    if (!eventPledgesError && eventPledgesData) {
+      const ep = eventPledgesData.map((pl: any) => ({ ...pl, pledgeType: 'event' }))
+      combinedPledges = [...combinedPledges, ...ep]
+    }
+
+    // Sort by created_at descending
+    combinedPledges.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+    userPledges.value = combinedPledges
 
     const { data: listingsData, error: listingsError } = await supabase
           .from('marketplace_listings')
@@ -285,6 +306,20 @@ const handleSaveProfile = async (updatedData: any) => {
     profileData.value.profile_data.Avatar = finalAvatarUrl
   }
 }
+
+const computedItemsDonated = computed(() => {
+  return userPledges.value.reduce((sum, pledge) => {
+    if (pledge.status !== 'completed') return sum
+    const itemsSum = pledge.items?.reduce((s: number, item: any) => s + (Number(item.quantity) || 0), 0) || 0
+    return sum + itemsSum
+  }, 0)
+})
+
+const computedProjectsSupported = computed(() => {
+  const completedPledges = userPledges.value.filter(p => p.status === 'completed')
+  const uniqueProjects = new Set(completedPledges.map(p => p.post_id || p.event_id || p.id))
+  return uniqueProjects.size
+})
 
 // Filter posts matching the logged-in user's database name
 const userPosts = computed(() => {
@@ -416,11 +451,11 @@ const requestStats = computed(() => ({
       <div class="profile-stats-wrapper" v-if="!isLoading && profileData">
         <div class="profile-stats-inner">
           <div class="stat-item">
-            <span class="stat-value">{{ profileData.profile_data?.ItemsDonated || 0 }}</span>
+            <span class="stat-value">{{ computedItemsDonated }}</span>
             <span class="stat-label">Items Donated</span>
           </div>
           <div class="stat-item">
-            <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
+            <span class="stat-value">{{ computedProjectsSupported }}</span>
             <span class="stat-label">Projects Supported</span>
           </div>
           <div class="stat-item">

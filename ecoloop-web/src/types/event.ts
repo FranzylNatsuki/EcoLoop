@@ -55,4 +55,7 @@ export interface EventItem {
   top_donors?: Pledge[]
   organizer?: Organizer
   related_events?: RelatedEvent[]
+  author_id?: string
+  latitude?: number | null
+  longitude?: number | null
 }

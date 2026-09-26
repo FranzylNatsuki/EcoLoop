@@ -12,7 +12,7 @@ onMounted(async () => {
 
   // Query pledges where the related post's author is the current user
   // We use !inner to filter the parent table based on the joined table
-  const { data, error } = await supabase
+  const { data: pledgesData, error: pledgesError } = await supabase
     .from('pledges')
     .select(`
       id,
@@ -22,14 +22,36 @@ onMounted(async () => {
       post:cause_requests!inner(title, author_id)
     `)
     .eq('cause_requests.author_id', session.user.id)
-    .order('created_at', { ascending: false })
-    .limit(10)
 
-  if (error) {
-    console.error('Error fetching notifications:', error.message)
-  } else {
-    notifications.value = data || []
+  const { data: eventPledgesData, error: eventPledgesError } = await supabase
+    .from('event_pledges')
+    .select(`
+      id,
+      created_at,
+      status,
+      donor:profiles!donor_id(full_name),
+      post:events!inner(title, author_id)
+    `)
+    .eq('events.author_id', session.user.id)
+
+  let combined: any[] = []
+
+  if (pledgesError) {
+    console.error('Error fetching cause pledges:', pledgesError.message)
+  } else if (pledgesData) {
+    const p = pledgesData.map(n => ({ ...n, pledgeType: 'cause' }))
+    combined = [...combined, ...p]
   }
+
+  if (eventPledgesError) {
+    console.error('Error fetching event pledges:', eventPledgesError.message)
+  } else if (eventPledgesData) {
+    const ep = eventPledgesData.map(n => ({ ...n, pledgeType: 'event' }))
+    combined = [...combined, ...ep]
+  }
+
+  combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  notifications.value = combined.slice(0, 10)
 
   isLoading.value = false
 })

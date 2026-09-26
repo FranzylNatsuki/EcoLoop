@@ -59,17 +59,29 @@ const fetchPledgeDetails = async (id: string) => {
     const { data: { session } } = await supabase.auth.getSession()
     currentUserId.value = session?.user.id || null
 
-    const { data, error } = await supabase
-      .from('pledges')
-      .select(`
+    const isEvent = route.query.type === 'event'
+    const table = isEvent ? 'event_pledges' : 'pledges'
+    
+    let query = supabase.from(table).select('*').eq('id', id).single()
+
+    if (isEvent) {
+      query = supabase.from(table).select(`
+        *,
+        donor:profiles!donor_id(full_name, email, contact_number),
+        post:events!event_id(title, author_id),
+        items:event_pledge_items(*)
+      `).eq('id', id).single()
+    } else {
+      query = supabase.from(table).select(`
         *,
         donor:profiles!pledges_donor_id_fkey(full_name, email, contact_number),
         post:cause_requests!pledges_post_id_fkey(title, author_id),
         items:pledge_items(*),
         images:pledge_images(image_url)
-      `)
-      .eq('id', id)
-      .single()
+      `).eq('id', id).single()
+    }
+
+    const { data, error } = await query
 
     if (error) throw error
     pledge.value = data
@@ -200,8 +212,11 @@ const executeStatusUpdate = async () => {
   confirmDialog.value.isOpen = false
 
   try {
+    const isEvent = route.query.type === 'event'
+    const table = isEvent ? 'event_pledges' : 'pledges'
+
     const { error } = await supabase
-      .from('pledges')
+      .from(table)
       .update({ status: newStatus })
       .eq('id', pledge.value.id)
 

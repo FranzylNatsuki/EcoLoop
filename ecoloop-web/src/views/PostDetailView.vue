@@ -10,7 +10,6 @@ import PostMaterialList from '../components/posts/PostMaterialList.vue'
 import PostCommentSection from '../components/posts/PostCommentSection.vue'
 import AuthorCard from '../components/sidebar/AuthorCard.vue'
 import CommunityRules from '../components/sidebar/CommunityRules.vue'
-import RelatedPosts from '../components/sidebar/RelatedPosts.vue'
 
 const route = useRoute()
 const postId = route.params.id as string
@@ -243,7 +242,7 @@ const authorProfile = computed(() => {
   }
 })
 
-const relatedPosts = computed(() => [])
+
 </script>
 
 <template>
@@ -284,7 +283,6 @@ const relatedPosts = computed(() => [])
     <template #sidebar>
       <AuthorCard v-if="authorProfile" :author="authorProfile" />
       <CommunityRules />
-      <RelatedPosts :posts="relatedPosts" />
     </template>
   </PageLayout>
 

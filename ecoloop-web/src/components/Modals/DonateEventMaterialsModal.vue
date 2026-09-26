@@ -24,6 +24,7 @@ interface PledgeItemDraft {
 
 const props = defineProps<{
   postId: string | number
+  initialMaterialName?: string
 }>()
 
 const isOpen = defineModel<boolean>({ default: false })
@@ -56,11 +57,15 @@ watch(isOpen, async (open) => {
   if (open) {
     dialogRef.value?.showModal()
 
+    title.value = ''
+    description.value = ''
+    items.value = [{ material_name: props.initialMaterialName || '', quantity: 1, unit: 'units' }]
+
     // Reset images on open
     imagePreviews.value = []
     imageFiles.value = []
 
-    await fetchEventLocation()
+    await fetchEventData()
 
     await nextTick()
     setTimeout(() => initMap(), 100)
@@ -77,14 +82,16 @@ watch(isOpen, async (open) => {
   }
 })
 
-// Fetch the event location directly from the events table
-async function fetchEventLocation() {
+const eventMaterials = ref<string[]>([])
+
+// Fetch the event location and materials directly from the events table
+async function fetchEventData() {
   if (!props.postId) return
 
   try {
     const { data, error } = await supabase
       .from('events')
-      .select('latitude, longitude, location, location_address')
+      .select('latitude, longitude, location, materials_needed')
       .eq('id', props.postId)
       .single()
 
@@ -93,10 +100,12 @@ async function fetchEventLocation() {
     if (data) {
       latitude.value = data.latitude
       longitude.value = data.longitude
-      locationAddress.value = data.location_address || data.location || ''
+      locationAddress.value = data.location || ''
+      const rawMaterials = Array.isArray(data.materials_needed) ? data.materials_needed : []
+      eventMaterials.value = rawMaterials.map((m: any) => m.material || m.name || '').filter(Boolean)
     }
   } catch (err) {
-    console.error("Failed to fetch event location:", err)
+    console.error("Failed to fetch event data:", err)
   }
 }
 
@@ -238,61 +247,14 @@ async function handleSubmit() {
 
     if (itemsError) throw new Error(itemsError.message)
 
-    // 4. Update current_quantity in event_materials table
-    for (const item of validItems) {
-          const matName = item.material_name.trim()
-          const qtyToAdd = Number(item.quantity) || 0
-
-          console.log(`🔍 Searching event_materials for "${matName}" under event ${props.postId}...`)
-
-          const { data: matData, error: selectErr } = await supabase
-            .from('event_materials')
-            .select('id, current_quantity')
-            .eq('event_id', props.postId)
-            .ilike('material_name', matName)
-            .maybeSingle()
-
-          if (selectErr) {
-            console.error(`❌ Error finding material "${matName}":`, selectErr.message)
-            continue
-          }
-
-          if (matData) {
-            const currentQty = Number(matData.current_quantity) || 0
-            const updatedQty = currentQty + qtyToAdd
-
-            const { error: updateErr } = await supabase
-              .from('event_materials')
-              .update({ current_quantity: updatedQty })
-              .eq('id', matData.id)
-
-            if (updateErr) {
-              console.error(`❌ DB Update failed for "${matName}":`, updateErr.message)
-            } else {
-              console.log(`✅ Updated "${matName}"! Old Qty: ${currentQty} -> New Qty: ${updatedQty}`)
-            }
-          } else {
-            console.warn(`⚠️ No row matching material_name "${matName}" found in event_materials table.`)
-          }
-        }
-
-    // 5. Upload & Insert Images
+    // 5. Upload Images (but don't insert into pledge_images as it conflicts with cause_requests)
     for (const file of imageFiles.value) {
       const fileExt = file.name.split('.').pop()
       const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`
       const filePath = `pledge-images/${fileName}`
 
-      const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file)
-
-      if (!uploadError) {
-        const { data } = supabase.storage.from('images').getPublicUrl(filePath)
-
-        await supabase.from('pledge_images').insert({
-          pledge_id: pledge.id,
-          image_url: data.publicUrl,
-          display_order: 99
-        })
-      }
+      // We still upload to storage, but skip inserting to DB since event_pledge_images doesn't exist
+      await supabase.storage.from('images').upload(filePath, file)
     }
 
     const totalQty = validItems.reduce((acc, curr) => acc + curr.quantity, 0)
@@ -369,12 +331,19 @@ async function handleSubmit() {
             <div class="items-scroll-list">
               <div v-for="(item, idx) in items" :key="idx" class="item-row">
                 <div class="item-inputs">
-                  <input
-                    v-model="item.material_name"
-                    type="text"
-                    class="form-input material-input"
-                    placeholder="Material name (e.g., Water Bottles)"
-                  />
+                  <div class="select-wrapper material-input-wrapper">
+                    <select
+                      v-model="item.material_name"
+                      class="form-input custom-select material-input"
+                      required
+                    >
+                      <option value="" disabled>Select Material</option>
+                      <option v-for="mat in eventMaterials" :key="mat" :value="mat">
+                        {{ mat }}
+                      </option>
+                    </select>
+                    <svg class="chevron-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#778732" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+                  </div>
                   <div class="qty-unit-group">
                     <div class="quantity-picker mini">
                       <button type="button" class="qty-btn" @click="decrementItemQty(idx)">-</button>
@@ -639,9 +608,34 @@ async function handleSubmit() {
   gap: 10px;
 }
 
-.material-input {
+.material-input-wrapper {
+  position: relative;
   flex: 2;
   min-width: 120px;
+}
+
+.custom-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  cursor: pointer;
+  padding-right: 32px;
+}
+
+.custom-select:invalid {
+  color: #94a3b8;
+}
+
+.chevron-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.material-input {
+  width: 100%;
 }
 
 .qty-unit-group {

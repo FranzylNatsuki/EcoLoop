@@ -65,6 +65,7 @@ export interface EventItem {
   recent_pledges?: Pledge[]
   top_donors?: Pledge[]
   related_events?: RelatedEvent[]
+  author_id?: string
 }
 
 export interface CreateEventPayload {
@@ -152,7 +153,8 @@ export function useEvents() {
         days_left: daysLeft,
         total_donors: 0,
         total_pledged: donatedItems
-      }
+      },
+      author_id: row.author_id
     }
   }
 
@@ -270,6 +272,10 @@ export function useEvents() {
       if (pledgeError) console.error("Pledge fetch error:", pledgeError)
 
       const allItems = pledgeItemsData || []
+      
+      console.log('--- EVENT PLEDGES DEBUG ---')
+      console.log('Event ID:', id)
+      console.log('Fetched pledge items:', allItems)
 
       // 1. Calculate total donated items directly from pledge items
       const calculatedTotalDonated = allItems.reduce((sum: number, item: any) => {
@@ -279,9 +285,10 @@ export function useEvents() {
       // 2. Map material_needed and calculate 'current' for each item dynamically
       const rawMaterials: MaterialNeed[] = data.materials_needed || []
       const updatedMaterials = rawMaterials.map((mat) => {
+        const matName = (mat.material || (mat as any).name || '').toLowerCase().trim()
         const currentQty = allItems
           .filter((item: any) =>
-            item.material_name?.toLowerCase().trim() === mat.material?.toLowerCase().trim()
+            (item.material_name || '').toLowerCase().trim() === matName
           )
           .reduce((sum: number, item: any) => sum + (Number(item.quantity) || 0), 0)
 
@@ -362,14 +369,7 @@ export function useEvents() {
           time: 'Top Contributor'
         }))
 
-      // --- D. Fetch Single Event Donated Total ---
-      const { data: totalRow } = await supabase
-        .from('event_funding_totals')
-        .select('donated_items')
-        .eq('event_id', id)
-        .single()
-
-      const donatedItems = calculatedTotalDonated > 0 ? calculatedTotalDonated : Number(totalRow?.donated_items || 0)
+      const donatedItems = calculatedTotalDonated > 0 ? calculatedTotalDonated : 0
 
       const { data: relatedData } = await supabase
         .from('events')
@@ -475,6 +475,36 @@ export function useEvents() {
     }
   }
 
+  async function updateEvent(eventId: string, updatedData: Partial<CreateEventPayload>) {
+    try {
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !session) return { success: false, error: 'Unauthorized' }
+
+      const payload: any = { ...updatedData }
+      // Only set latitude/longitude to null if they are explicitly passed as null/undefined, otherwise keep as is or override
+      // But it's easier to just pass the whole Partial
+
+      const { data: eventData, error: eventError } = await supabase
+        .from('events')
+        .update(payload)
+        .eq('id', eventId)
+        .eq('author_id', session.user.id)
+        .select()
+
+      if (eventError) throw eventError
+
+      if (!eventData || eventData.length === 0) {
+        throw new Error('Update affected 0 rows. You may not have permission (RLS) or the event ID does not exist.')
+      }
+
+      await fetchEvents()
+      return { success: true, data: eventData[0] }
+    } catch (err: any) {
+      console.error('Error updating event:', err.message || err)
+      return { success: false, error: err.message || err }
+    }
+  }
+
   onMounted(() => {
     if (events.value.length === 0) {
       fetchEvents()
@@ -487,6 +517,7 @@ export function useEvents() {
     fetchEvents,
     fetchEventById,
     createEvent,
+    updateEvent,
     submitPledge
   }
 }

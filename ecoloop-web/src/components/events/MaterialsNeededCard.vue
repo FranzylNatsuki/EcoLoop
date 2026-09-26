@@ -14,12 +14,12 @@ defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'open-donate'): void
+  (e: 'open-donate', materialName?: string): void
 }>()
 
 function handleDonate(materialName: string) {
   console.log('Donating to:', materialName)
-  emit('open-donate')
+  emit('open-donate', materialName)
 }
 </script>
 

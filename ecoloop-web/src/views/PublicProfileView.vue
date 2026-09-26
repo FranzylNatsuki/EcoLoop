@@ -80,11 +80,32 @@ onMounted(async () => {
     `)
     .eq('donor_id', targetUserId)
     .eq('status', 'completed')
-    .order('created_at', { ascending: false })
+
+  const { data: eventPledgesData, error: eventPledgesError } = await supabase
+    .from('event_pledges')
+    .select(`
+      *,
+      post:events(title),
+      items:event_pledge_items(material_name, quantity, unit)
+    `)
+    .eq('donor_id', targetUserId)
+    .eq('status', 'completed')
+
+  let combinedPledges: any[] = []
 
   if (!pledgesError && pledgesData) {
-    publicPledges.value = pledgesData
+    const p = pledgesData.map((pl: any) => ({ ...pl, pledgeType: 'cause' }))
+    combinedPledges = [...combinedPledges, ...p]
   }
+
+  if (!eventPledgesError && eventPledgesData) {
+    const ep = eventPledgesData.map((pl: any) => ({ ...pl, pledgeType: 'event' }))
+    combinedPledges = [...combinedPledges, ...ep]
+  }
+
+  combinedPledges.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
+  publicPledges.value = combinedPledges
 
   isLoading.value = false
 })
@@ -93,6 +114,20 @@ const userPledges = computed(() => {
   if (!publicPledges.value) return []
   // Filter out any donations they made to their own projects
   return publicPledges.value.filter(pledge => pledge.post?.author_id !== targetUserId)
+})
+
+const computedItemsDonated = computed(() => {
+  return userPledges.value.reduce((sum, pledge) => {
+    if (pledge.status !== 'completed') return sum
+    const itemsSum = pledge.items?.reduce((s: number, item: any) => s + (Number(item.quantity) || 0), 0) || 0
+    return sum + itemsSum
+  }, 0)
+})
+
+const computedProjectsSupported = computed(() => {
+  const completedPledges = userPledges.value.filter(p => p.status === 'completed')
+  const uniqueProjects = new Set(completedPledges.map(p => p.post_id || p.event_id || p.id))
+  return uniqueProjects.size
 })
 
 const userPosts = computed(() => {
@@ -215,11 +250,11 @@ async function submitRating(score: number) {
       <div class="profile-stats-wrapper" v-if="!isLoading && profileData">
         <div class="profile-stats-inner">
           <div class="stat-item">
-            <span class="stat-value">{{ profileData.profile_data?.ItemsDonated || 0 }}</span>
+            <span class="stat-value">{{ computedItemsDonated }}</span>
             <span class="stat-label">Items Donated</span>
           </div>
           <div class="stat-item">
-            <span class="stat-value">{{ profileData.profile_data?.ProjectsSupported || 0 }}</span>
+            <span class="stat-value">{{ computedProjectsSupported }}</span>
             <span class="stat-label">Projects Supported</span>
           </div>
           <div class="stat-item">

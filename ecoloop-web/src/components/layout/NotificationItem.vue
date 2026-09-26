@@ -15,8 +15,11 @@ const formattedDate = computed(() => {
 })
 
 const navigateToPledge = () => {
-  // Pushes to the pledge view page, passing the ID in the URL
-  router.push(`/pledge/${props.pledge.id}`)
+  if (props.pledge.pledgeType === 'event') {
+    router.push({ path: `/pledge/${props.pledge.id}`, query: { type: 'event' } })
+  } else {
+    router.push(`/pledge/${props.pledge.id}`)
+  }
 }
 </script>
 

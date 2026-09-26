@@ -18,6 +18,10 @@ L.Icon.Default.mergeOptions({
 // -----------------------------
 
 const isOpen = defineModel<boolean>({ default: false })
+const props = defineProps<{
+  initialData?: any
+}>()
+
 const dialogRef = ref<HTMLDialogElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
@@ -27,7 +31,7 @@ const emit = defineEmits<{
   (e: 'publish', payload: { event: any; materials: any[] }): void
 }>()
 
-// Blank initial form state
+// Form state
 const formData = ref({
   title: '',
   description: '',
@@ -41,6 +45,8 @@ const formData = ref({
   longitude: null as number | null,
   organizer: ''
 })
+
+const materialsList = ref<{ name: string; qty: number; unit: string }[]>([])
 
 const categories = [
   'Gardening',
@@ -125,6 +131,35 @@ function initMap() {
 watch(isOpen, async (open) => {
   if (open) {
     currentStep.value = 1
+    
+    // Prefill data
+    if (props.initialData) {
+      formData.value.title = props.initialData.event_title || ''
+      formData.value.description = props.initialData.description || ''
+      formData.value.category = props.initialData.category || ''
+      
+      const evtDate = new Date(props.initialData.schedule || Date.now())
+      formData.value.date = evtDate.toISOString().split('T')[0]
+      formData.value.startTime = evtDate.toTimeString().substring(0, 5)
+      
+      // Since end time isn't stored separately, default it to 2 hours after start if missing
+      const endDate = new Date(evtDate.getTime() + 2 * 60 * 60 * 1000)
+      formData.value.endTime = endDate.toTimeString().substring(0, 5)
+      
+      formData.value.organizer = props.initialData.organizer?.name || 'Community Organizer'
+      
+      formData.value.location = props.initialData.location || ''
+      formData.value.latitude = props.initialData.latitude || null
+      formData.value.longitude = props.initialData.longitude || null
+      formData.value.bannerImage = props.initialData.image || ''
+      
+      materialsList.value = (props.initialData.materials_needed || []).map((m: any) => ({
+        name: m.material || m.name || '',
+        qty: m.target || m.qty || 1,
+        unit: m.unit || 'pcs'
+      }))
+    }
+
     dialogRef.value?.showModal()
     await nextTick()
     setTimeout(() => initMap(), 100)
@@ -175,7 +210,6 @@ function removeBanner() {
 }
 
 // --- STEP 2: Materials Logic ---
-const materialsList = ref<{ name: string; qty: number; unit: string }[]>([])
 const newMatName = ref('')
 const newMatQty = ref<number | null>(null)
 const newMatUnit = ref('pcs')
@@ -236,7 +270,7 @@ function submitFinalEvent() {
               <PackagePlus v-else :size="20" color="#778732" />
             </div>
             <h2 class="create-new-event-title">
-              {{ currentStep === 1 ? 'Create New Event' : 'Request Materials' }}
+              {{ currentStep === 1 ? 'Edit Event' : 'Request Materials' }}
             </h2>
           </div>
           <button type="button" class="btn-close" @click="isOpen = false">

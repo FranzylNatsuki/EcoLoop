@@ -40,6 +40,9 @@ export interface Post {
   post_images?: PostImage[]
   eventDetails?: EventDetails
   materials?: MaterialItem[]
+  latitude?: number | null
+  longitude?: number | null
+  location_address?: string
 }
 
 export interface CreatePostPayload {
@@ -49,6 +52,9 @@ export interface CreatePostPayload {
   images: string[]
   eventDetails?: EventDetails
   materials?: MaterialItem[]
+  latitude?: number | null
+  longitude?: number | null
+  location_address?: string
 }
 
 const posts = ref<Post[]>([])
@@ -122,6 +128,9 @@ export function usePosts() {
           title: newPostData.title,
           body: newPostData.description,
           category: newPostData.category,
+          latitude: newPostData.latitude ?? null,
+          longitude: newPostData.longitude ?? null,
+          location_address: newPostData.location_address ?? null,
         })
         .select()
         .single()
