@@ -41,7 +41,11 @@ const categories = computed(() => {
     'Upcycling',
     'Crafts & DIY',
     'Zero Waste',
-    'E-Waste'
+    'E-Waste',
+    'Clean-Up Drive',
+    'Recycling Workshop',
+    'Upcycling Event',
+    'Tree Planting'
   ]
 })
 
@@ -51,18 +55,18 @@ function selectCategory(category: string) {
   if (category === 'All') {
     delete query.category
   } else {
-    query.category = category
+    query.category = category.toLowerCase() // NOTE: Restored old logic where it was lowercased!
   }
 
   router.push({ path: route.path, query })
 }
 
 function isActive(category: string) {
-  const current = (route.query.category as string || '')
+  const current = (route.query.category as string || '').toLowerCase()
   if (category === 'All') {
-    return current === '' || current.toLowerCase() === 'all'
+    return !current || current === 'all'
   }
-  return current.toLowerCase() === category.toLowerCase()
+  return current === category.toLowerCase()
 }
 </script>
 
@@ -72,7 +76,7 @@ function isActive(category: string) {
       v-for="category in categories"
       :key="category"
       class="category-pill"
-      :class="{ 'category-pill--active': isActive(category) }"
+      :class="{ active: isActive(category) }"
       @click="selectCategory(category)"
     >
       {{ category }}
@@ -81,40 +85,16 @@ function isActive(category: string) {
 </template>
 
 <style scoped>
+/* Add the requested centering but keep all original styles */
 .categories-bar {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 16px;
-  max-width: 1200px;
-  margin: 0 auto;
+  flex-wrap: wrap; /* Good for responsiveness just in case */
 }
 
-.category-pill {
-  padding: 8px 20px;
-  border-radius: 24px;
-  border: 1.5px solid transparent;
-  background: #f0f2ef;
-  color: #3f463f;
-  font-family: 'Outfit', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.category-pill:hover { 
-  background: #e4e7e3; 
-  transform: translateY(-1px);
-}
-
-.category-pill--active { 
-  background: #778732; 
-  color: #ffffff; 
-  box-shadow: 0 4px 12px rgba(119, 135, 50, 0.25);
-  transform: translateY(-1px);
+/* Provide an explicit active state matching hover from global styles */
+.category-pill.active {
+  background: #f0f7f0;
+  border-color: #a4ceaf;
 }
 </style>

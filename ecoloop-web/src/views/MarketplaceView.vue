@@ -146,41 +146,7 @@ async function refreshListings() {
 </template>
 
 <style scoped>
-.marketplace-categories {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  padding: 24px 16px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
 
-.category-pill {
-  padding: 8px 20px;
-  border-radius: 24px;
-  border: 1.5px solid transparent;
-  background: #f0f2ef;
-  color: #3f463f;
-  font-family: 'Outfit', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.category-pill:hover { 
-  background: #e4e7e3; 
-  transform: translateY(-1px);
-}
-
-.category-pill--active { 
-  background: #778732; 
-  color: #ffffff; 
-  box-shadow: 0 4px 12px rgba(119, 135, 50, 0.25);
-  transform: translateY(-1px);
-}
 
 .events-list-page {
   display: flex;

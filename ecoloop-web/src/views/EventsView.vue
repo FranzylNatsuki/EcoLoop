@@ -343,37 +343,7 @@ watch(
 
 <style scoped>
 /* Grid View Styles */
-.events-categories {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  padding: 24px 16px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
 
-.category-pill {
-  padding: 8px 20px;
-  border-radius: 24px;
-  border: 1.5px solid transparent;
-  background: #f0f2ef;
-  color: #3f463f;
-  font-family: 'Outfit', sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.category-pill:hover {
-  background: #e4e7e3;
-}
-
-.category-pill--active {
-  background: #778732;
-  color: #ffffff;
-}
 
 .events-list-page {
   display: flex;
