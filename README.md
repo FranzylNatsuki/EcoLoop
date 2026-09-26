@@ -86,11 +86,9 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 `src/components/posts` *homepage posts components*
 * CreatePostBar.vue - + Create Post Button
 * DonationCard.vue
-* MarketCard.vue
-* PostActions.vue - comments, donate, etc.
-* PostActionsMarket.vue
-* PostCard.vue - Post component
 * EventCard.vue - Event component card
+* PostActions.vue - comments, share, and donate
+* PostCard.vue - Post component
 * VotePanel.vue - reddit votes ahh
 * PostCommentItem.vue
 * PostCommentSection.vue
@@ -105,12 +103,12 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * AuthorCard.vue
 * RelatedPosts.vue
 * SavedProjectsCard.vue
-* TrendingTopics.vue
+* DonationHistoryCard.vue
 
 `src/components/events` *event page contents*
 * AboutProjectCard.vue
 * CampaignOrganizerCard.vue
-* DonorsLeaderbord.vue
+* DonorsLeaderboard.vue
 * EventHero.vue
 * EventStats.vue
 * MaterialRow.vue
@@ -121,39 +119,45 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 
 `src/components/marketplace` *marketplace contents*
 * MarketplaceCard.vue - item container
-* Popular CategoriesCard.vue
+* PopularCategoriesCard.vue
 
 `src/components/Modals` *dialogue boxes*
-* CreatePost.vue
-* DonateMaterialsModals.vue
-* CreateEventModal.vue
 * CreateChooserModal.vue
-* RequestMaterialsModal.vue
+* CreatePost.vue
+* CreateEventModal.vue
+* CreateMarketplaceModal.vue
+* DonateMaterialsModal.vue
+* DonateEventMaterialsModal.vue
+* BuyRequestModal.vue
 * ThankYouDonationModal.vue
 * EditProfileModal.vue
 * EditPostModal.vue
-* MarketplaceInquiryModal.vue
-* CreateMarketplaceModal.vue
 
 `src/views` *individual pages*
 * HomeView.vue - home page component
 * EventsView.vue - events page component
 * MarketplaceView.vue - marketplace page
+* MarketDetailView.vue - single marketplace item
 * PostDetailView.vue - enlarged posts once clicked
 * PledgeDetailView.vue
 * ProfileView.vue
-* PublicProfile.vue
+* PublicProfileView.vue
 * Login.vue
 * Registration.vue
+* ForgotPassword.vue
+* UpdatePassword.vue
 
 `src/assets` *contains logos / images*
 
 `src/types` *object type definitions*
 
-`src/composables` *contains engine for json read / write*
-* usePosts.ts
-* useEvents.ts
-* useAuth.ts
+`src/composables` *contains engine for json read / write and database interaction*
+* useAuth.ts - authentication and user info
+* usePosts.ts - cause request posts
+* useEvents.ts - event posts
+* useMarketplace.ts - marketplace listings
+* useSort.ts - logic for New/Hot/Nearest filtering
+* useSearch.ts - global search bar logic
 
 ### Router (IMPORTANT!)
 Router defines the locators for the view controller (which page is loaded, refer to examples of how `<RouterLink to="">` is used in my examples e.g.: `CreatePostButton.vu`). *New Pages* require to be defined in the router and must be addressed using RouterLink as href. It is located in `src/router`. Edit `index.ts`.
