@@ -69,3 +69,4 @@ supabase_backup_schema.sql
 sql.txt
 supabase/.temp/
 ecoloop-web/newenv.txt
+resolve_script.py
