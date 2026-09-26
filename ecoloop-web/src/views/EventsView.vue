@@ -46,21 +46,10 @@ const donatePrefillName = ref('')
 
 // Grid View State
 const userLocation = ref<{ lat: number; lng: number } | null>(null)
-const categories = [
-  { label: 'All', value: '' },
-  { label: 'Volunteering', value: 'Volunteering' },
-  { label: 'Fundraiser', value: 'Fundraiser' },
-  { label: 'Workshop', value: 'Workshop' },
-  { label: 'Clean-up', value: 'Clean-up' },
-  { label: 'Gardening', value: 'Gardening' },
-  { label: 'Crafts & DIY', value: 'Crafts & DIY' },
-]
 
 const activeCategory = computed(() => (route.query.category as string) || '')
 
-function setCategory(value: string) {
-  router.push({ path: '/events', query: value ? { category: value } : {} })
-}
+
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371
@@ -318,19 +307,9 @@ watch(
 
   <!-- 2. ALL EVENTS LIST GRID VIEW -->
   <template v-else>
-    <CategoryBar />
+    <CategoryBar type="events" />
 
-    <nav class="events-categories">
-      <button
-        v-for="cat in categories"
-        :key="cat.label"
-        class="category-pill"
-        :class="{ 'category-pill--active': activeCategory === cat.value }"
-        @click="setCategory(cat.value)"
-      >
-        {{ cat.label }}
-      </button>
-    </nav>
+    
 
     <PageLayout>
       <template #main>

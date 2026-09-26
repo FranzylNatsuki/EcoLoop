@@ -27,7 +27,7 @@ const testMarketPost = {
 
 <template>
   <div>
-    <CategoryBar />
+    <CategoryBar type="marketplace" />
     <PageLayout>
       <template #main>
         <h2 style="margin: 16px 0; font-family: 'Outfit', sans-serif;">

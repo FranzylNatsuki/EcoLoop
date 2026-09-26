@@ -43,15 +43,13 @@ const formData = ref({
 })
 
 const categories = [
+  'Volunteering',
+  'Fundraiser',
+  'Workshop',
+  'Clean-up',
   'Gardening',
-  'Composting',
-  'Upcycling',
   'Crafts & DIY',
-  'Zero Waste',
-  'E-Waste',
-  'Clean-Up Drive',
-  'Recycling Workshop',
-  'Upcycling Event',
+  'Upcycling',
   'Tree Planting'
 ]
 

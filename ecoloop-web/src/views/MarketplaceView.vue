@@ -39,20 +39,10 @@ onMounted(() => {
   }
 })
 
-const categories = [
-  { label: 'All', value: '' },
-  { label: 'Plastics', value: 'Plastics' },
-  { label: 'Glass', value: 'Glass' },
-  { label: 'Paper/Cardboard', value: 'Paper/Cardboard' },
-  { label: 'Metal', value: 'Metal' },
-  { label: 'Electronics', value: 'Electronics' },
-]
 
 const activeCategory = computed(() => (route.query.category as string) || '')
 
-function setCategory(value: string) {
-  router.push({ path: '/marketplace', query: value ? { category: value } : {} })
-}
+
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
@@ -117,19 +107,9 @@ async function refreshListings() {
 
 <template>
   <div>
-    <CategoryBar />
+    <CategoryBar type="marketplace" />
 
-    <nav class="marketplace-categories">
-      <button
-        v-for="cat in categories"
-        :key="cat.label"
-        class="category-pill"
-        :class="{ 'category-pill--active': activeCategory === cat.value }"
-        @click="setCategory(cat.value)"
-      >
-        {{ cat.label }}
-      </button>
-    </nav>
+    
 
     <PageLayout>
       <template #main>
