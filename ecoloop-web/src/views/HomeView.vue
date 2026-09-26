@@ -9,7 +9,6 @@ import EventCard from '../components/posts/EventCard.vue'
 import UserCard from '../components/posts/UserCard.vue'
 import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
 import CommunityRules from '../components/sidebar/CommunityRules.vue'
-// import TrendingTopics from '../components/sidebar/TrendingTopics.vue'
 import EventPreview from '../components/sidebar/EventPreview.vue'
 import { useSort } from '../composables/useSort'
 import { usePosts } from '../composables/usePosts'
@@ -29,10 +28,49 @@ const searchedUsers = ref<any[]>([])
 const selectedListing = ref<any>(null)
 const isBuyRequestModalOpen = ref(false)
 
+// User Location State for the 'Nearest' filter
+const userLocation = ref<{ lat: number; lng: number } | null>(null)
+
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * (Math.PI / 180)
+  const dLon = (lon2 - lon1) * (Math.PI / 180)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+function getItemDistance(item: any): number {
+  if (!userLocation.value) return Number(item.distance) || Infinity
+  const lat = item.latitude ?? item.lat
+  const lng = item.longitude ?? item.lng ?? item.lon
+  if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
+    return calculateDistance(userLocation.value.lat, userLocation.value.lng, Number(lat), Number(lng))
+  }
+  return Number(item.distance) || Infinity
+}
+
 onMounted(() => {
   fetchPosts()
   fetchEvents()
   fetchListings()
+
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        userLocation.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+      },
+      (err) => {
+        console.warn('Geolocation denied or failed, using default location.', err)
+        userLocation.value = { lat: 9.3068, lng: 123.3054 }
+      }
+    )
+  } else {
+    userLocation.value = { lat: 9.3068, lng: 123.3054 }
+  }
 })
 
 onMounted(() => window.addEventListener('purchase-request-submitted', refreshMarketplaceRequests))
@@ -43,7 +81,6 @@ watch(debouncedSearchQuery, async (newQuery) => {
   fetchEvents({ searchQuery: newQuery })
   fetchPosts(newQuery)
 
-  // Fetch users for the main feed if there's a search term
   if (newQuery.trim()) {
     const { data } = await supabase
       .from('profiles')
@@ -71,7 +108,6 @@ const feed = computed(() => {
     combined = combined.filter((entry) => {
       const item = entry.item as any
 
-      // IF USER CLICKED "Cause Requests" IN SIDEBAR (/home?category=cause)
       if (activeCategory === 'cause' || activeCategory === 'cause_request') {
         return (
           entry.kind === 'post' &&
@@ -84,7 +120,6 @@ const feed = computed(() => {
         )
       }
 
-      // FOR TOP CATEGORY PILLS
       const itemCat = (item.category || item.event_category || '').toLowerCase()
       return itemCat === activeCategory
     })
@@ -107,8 +142,8 @@ const feed = computed(() => {
 
   if (selectedSort.value === 'Nearest') {
     return combined.sort((a, b) => {
-      const distA = Number((a.item as any).distance) || Infinity
-      const distB = Number((b.item as any).distance) || Infinity
+      const distA = getItemDistance(a.item)
+      const distB = getItemDistance(b.item)
       return distA - distB
     })
   }
@@ -123,7 +158,8 @@ function openEvent(id: string | number) {
 }
 
 function openMarketplaceItem(id: string | number) {
-  router.push(`/marketplace/${id}`)}
+  router.push(`/marketplace/${id}`)
+}
 
 function handleMarketplaceEdit(post: any) {
   openMarketplaceItem(post.id)
@@ -178,10 +214,9 @@ function calculateProgress(eventItem: any): number {
         </template>
       </template>
 
-      <!-- Only right sidebar widgets belong here -->
+      <!-- Sidebar -->
       <template #sidebar>
         <CommunityRules />
-        <!-- <TrendingTopics /> -->
 
         <div v-if="sidebarEvents.length > 0" class="sidebar-events-wrapper">
           <EventPreview
@@ -218,6 +253,6 @@ function calculateProgress(eventItem: any): number {
 .main-feed {
   display: flex;
   flex-direction: column;
-  gap: 16px; /* single source of truth for spacing */
+  gap: 16px;
 }
 </style>
