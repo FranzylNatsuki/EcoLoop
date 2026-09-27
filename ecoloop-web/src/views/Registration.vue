@@ -58,6 +58,11 @@ const goToStep2 = async () => {
     return
   }
 
+  if (password.value.length < 6) {
+    errorMessage.value = 'Password must be at least 6 characters.'
+    return
+  }
+
   if (password.value !== confirmPassword.value) {
     errorMessage.value = 'Passwords do not match.'
     return
@@ -306,6 +311,7 @@ const handleRegister = async () => {
               v-model="password"
               :type="showPassword ? 'text' : 'password'"
               placeholder="••••••••"
+              minlength="6"
               required
             />
             <button type="button" class="eye-btn" @click="togglePasswordVisibility">
@@ -325,6 +331,7 @@ const handleRegister = async () => {
               v-model="confirmPassword"
               :type="showConfirmPassword ? 'text' : 'password'"
               placeholder="••••••••"
+              minlength="6"
               required
             />
             <button type="button" class="eye-btn" @click="toggleConfirmPasswordVisibility">
