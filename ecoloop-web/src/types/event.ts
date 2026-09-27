@@ -45,6 +45,7 @@ export interface EventItem {
   // RSVP-style (used by simpler events)
   participant_goal?: number
   attendees_count?: number
+  followers_count?: number
 
   // Campaign-style (used by EventsView + MaterialsNeededCard etc.)
   urgency_tag?: string

@@ -41,6 +41,7 @@ export interface RelatedEvent {
   id: string
   title: string
   category: string
+  followers_count?: number
   image: string
   fulfillment_percent: number
 }
@@ -55,6 +56,7 @@ export interface EventItem {
   longitude?: number | null
   description: string
   category: string
+  followers_count?: number
   image: string
   materials_needed: MaterialNeed[]
   fulfillment_percent: number
@@ -72,6 +74,7 @@ export interface CreateEventPayload {
   title: string
   description: string
   category: string
+  followers_count?: number
   location: string
   latitude?: number | null
   longitude?: number | null
@@ -120,6 +123,9 @@ export function useEvents() {
     const eventDate = new Date(row.event_date || row.schedule || Date.now())
     const diffTime = eventDate.getTime() - Date.now()
     const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)))
+    
+    // Process Followers
+    const followersCount = Array.isArray(row.followers) ? (row.followers[0]?.count || 0) : (row.followers?.count || 0)
 
     const rawAuthor = Array.isArray(row.author) ? row.author[0] : row.author
     const rawProfile = Array.isArray(rawAuthor?.profile_data) ? rawAuthor?.profile_data[0] : rawAuthor?.profile_data
@@ -137,6 +143,7 @@ export function useEvents() {
     return {
       type: 'event',
       id: row.id,
+      followers_count: followersCount,
       event_title: row.title || 'Untitled Event',
       schedule: row.event_date || '',
       location: row.location || 'Location TBA',
@@ -177,7 +184,8 @@ export function useEvents() {
             is_org,
             profile_data:profile_data_fk ( Avatar, about ),
             organizations!organization_id ( verification_status )
-          )
+          ),
+          followers:event_followers (count)
         `)
         .order('created_at', { ascending: false })
         .limit(options?.limit || 20)
@@ -254,7 +262,8 @@ export function useEvents() {
             is_org,
             profile_data:profile_data_fk ( Avatar, about ),
             organizations!organization_id ( verification_status )
-          )
+          ),
+          followers:event_followers (count)
         `)
         .eq('id', id)
         .single()
