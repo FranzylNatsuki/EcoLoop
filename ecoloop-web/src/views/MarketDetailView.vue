@@ -362,7 +362,7 @@ async function loadPage() {
 }
 
 
-async function updateListingStatus(status: 'sold' | 'available' | 'reserved' | 'cancelled') {
+async function updateListingStatus(status: 'sold' | 'available' | 'cancelled') {
   if (!isOwner.value || !post.value || isUpdatingListing.value) return
 
   isUpdatingListing.value = true
@@ -739,7 +739,6 @@ async function handleShare() {
         <div class="modal-body manage-listing-actions">
           <p class="muted-text">Current status: <strong>{{ post?.status || 'available' }}</strong></p>
           <button type="button" class="btn-secondary" :disabled="isUpdatingListing" @click="updateListingStatus('available')">Mark Available</button>
-          <button type="button" class="btn-secondary" :disabled="isUpdatingListing" @click="updateListingStatus('reserved')">Mark Reserved</button>
           <button type="button" class="btn-secondary" :disabled="isUpdatingListing" @click="updateListingStatus('sold')">Mark Sold</button>
           <button type="button" class="btn-primary" @click="showEditModal = true">Edit Details</button>
           <button type="button" class="btn-danger" :disabled="isUpdatingListing" @click="updateListingStatus('cancelled')">Cancel Listing</button>

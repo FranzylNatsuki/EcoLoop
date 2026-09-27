@@ -7,7 +7,8 @@ import type { MarketplaceListing } from '../../composables/useMarketplace'
 const props = withDefaults(defineProps<{
   listing?: MarketplaceListing
   post?: MarketplaceListing
-}>(), { listing: undefined, post: undefined })
+  variant?: 'grid' | 'feed'
+}>(), { listing: undefined, post: undefined, variant: 'grid' })
 
 const emit = defineEmits<{
   (event: 'edit', listing: MarketplaceListing | undefined): void
@@ -79,7 +80,7 @@ const getCategoryStyle = (category?: string) => {
 </script>
 
 <template>
-  <div class="listing-card" role="link" tabindex="0" @click="openListing" @keydown.enter="openListing">
+  <div :class="['listing-card', `variant-${variant}`]" role="link" tabindex="0" @click="openListing" @keydown.enter="openListing">
     <div class="image-container">
       <img :src="coverImage" :alt="listingData?.title" class="product-photo" />
       <div
@@ -160,6 +161,15 @@ const getCategoryStyle = (category?: string) => {
   aspect-ratio: 1 / 1;
   position: relative;
   width: 100%;
+}
+
+.variant-feed .image-container {
+  aspect-ratio: unset;
+  max-height: 360px;
+}
+
+.variant-feed .product-photo {
+  max-height: 360px;
 }
 
 .product-photo {
