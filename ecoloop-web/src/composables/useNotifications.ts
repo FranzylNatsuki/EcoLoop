@@ -22,6 +22,8 @@ export function useNotifications() {
         post:cause_requests!inner(title, author_id)
       `)
       .eq('cause_requests.author_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
 
     const { data: eventPledgesData } = await supabase
       .from('event_pledges')
@@ -31,6 +33,8 @@ export function useNotifications() {
         post:events!inner(title, author_id)
       `)
       .eq('events.author_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
       
     const { data: purchaseData } = await supabase
       .from('purchase_requests')
@@ -39,6 +43,8 @@ export function useNotifications() {
         post:marketplace_listings(title)
       `)
       .eq('seller_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
 
     let combined: any[] = []
 

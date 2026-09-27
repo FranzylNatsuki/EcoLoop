@@ -80,6 +80,8 @@ onMounted(async () => {
     `)
     .eq('donor_id', targetUserId)
     .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(20)
 
   const { data: eventPledgesData, error: eventPledgesError } = await supabase
     .from('event_pledges')
@@ -90,6 +92,8 @@ onMounted(async () => {
     `)
     .eq('donor_id', targetUserId)
     .eq('status', 'completed')
+    .order('created_at', { ascending: false })
+    .limit(20)
 
   let combinedPledges: any[] = []
 

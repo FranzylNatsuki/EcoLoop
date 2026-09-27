@@ -73,6 +73,7 @@ import { supabase } from './useAuth'
             `)
             .eq('status', 'available')
             .order('created_at', { ascending: false })
+            .limit(20)
 
           if (error) throw error
 

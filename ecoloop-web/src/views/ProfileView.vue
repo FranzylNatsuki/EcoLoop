@@ -56,6 +56,7 @@ async function fetchUserRequests() {
       .select('*')
       .eq('buyer_id', buyerId)
       .order('created_at', { ascending: false })
+      .limit(20)
 
     if (requestsError) throw requestsError
 
@@ -158,6 +159,8 @@ onMounted(async () => {
         items:pledge_items(material_name, quantity, unit)
       `)
       .eq('donor_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
 
     const { data: eventPledgesData, error: eventPledgesError } = await supabase
       .from('event_pledges')
@@ -167,6 +170,8 @@ onMounted(async () => {
         items:event_pledge_items(material_name, quantity, unit)
       `)
       .eq('donor_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
 
     let combinedPledges: any[] = []
 

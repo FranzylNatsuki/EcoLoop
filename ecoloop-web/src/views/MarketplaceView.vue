@@ -8,7 +8,7 @@ import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
 import CategoryBar from '../components/layout/CategoryBar.vue'
 import { useMarketplace } from '../composables/useMarketplace'
 import type { MarketplaceListing } from '../composables/useMarketplace'
-import { useSort } from '../composables/useSort'
+import { useSort, getHotnessScore } from '../composables/useSort'
 
 const route = useRoute()
 const router = useRouter()
@@ -73,7 +73,7 @@ const filteredListings = computed(() => {
         case 'New':
           return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
         case 'Hot':
-          return (b.author?.score || 0) - (a.author?.score || 0)
+          return getHotnessScore(b) - getHotnessScore(a)
         case 'Nearest':
           if (!userLocation.value) return 0
           const distA = (a.latitude && a.longitude) ? calculateDistance(userLocation.value.lat, userLocation.value.lng, a.latitude, a.longitude) : Infinity

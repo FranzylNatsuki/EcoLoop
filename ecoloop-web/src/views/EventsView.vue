@@ -2,7 +2,7 @@
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useEvents } from '../composables/useEvents'
-import { useSort } from '../composables/useSort'
+import { useSort, getHotnessScore } from '../composables/useSort'
 import type { EventItem } from '../types/event'
 
 import CategoryBar from '../components/layout/CategoryBar.vue'
@@ -80,7 +80,7 @@ const filteredEvents = computed(() => {
         case 'New':
           return new Date((b as any).created_at || (b as any).schedule || 0).getTime() - new Date((a as any).created_at || (a as any).schedule || 0).getTime()
         case 'Hot':
-          return ((b as any).fulfillment_percent || (b as any).likes_count || 0) - ((a as any).fulfillment_percent || (a as any).likes_count || 0)
+          return getHotnessScore(b) - getHotnessScore(a)
         case 'Nearest': {
           if (!userLocation.value) return 0
           const latA = (a as any).latitude ?? (a as any).lat

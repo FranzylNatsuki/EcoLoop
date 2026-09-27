@@ -10,7 +10,7 @@ import UserCard from '../components/posts/UserCard.vue'
 import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
 import CommunityRules from '../components/sidebar/CommunityRules.vue'
 import EventPreview from '../components/sidebar/EventPreview.vue'
-import { useSort } from '../composables/useSort'
+import { useSort, getHotnessScore } from '../composables/useSort'
 import { usePosts } from '../composables/usePosts'
 import { useEvents } from '../composables/useEvents'
 import { useSearch } from '../composables/useSearch'
@@ -135,8 +135,7 @@ const feed = computed(() => {
 
   if (selectedSort.value === 'Hot') {
     return combined.sort((a, b) =>
-      ((b.item as any).likes_count || (b.item as any).upvotes || (b.item as any).vote_count || 0) -
-      ((a.item as any).likes_count || (a.item as any).upvotes || (a.item as any).vote_count || 0)
+      getHotnessScore(b.item) - getHotnessScore(a.item)
     )
   }
 

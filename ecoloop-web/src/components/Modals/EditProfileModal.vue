@@ -149,20 +149,27 @@ function triggerFileInput() {
   fileInputRef.value?.click()
 }
 
-function handleFileUpload(event: Event) {
+
+import imageCompression from 'browser-image-compression'
+async function handleFileUpload(event: Event) {
   const target = event.target as HTMLInputElement
   if (!target.files || target.files.length === 0) return
 
   const file = target.files[0]
-  avatarFile.value = file
+  try {
+    const options = { maxSizeMB: 0.3, maxWidthOrHeight: 800, useWebWorker: true, fileType: 'image/webp' }
+    const compressed = await imageCompression(file, options)
+    const newFile = new File([compressed], file.name.replace(/\.[^/.]+$/, ".webp"), { type: 'image/webp' })
+    avatarFile.value = newFile
 
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    if (e.target?.result) {
-      avatarPreview.value = e.target.result as string
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      if (e.target?.result) {
+        avatarPreview.value = e.target.result as string
+      }
     }
-  }
-  reader.readAsDataURL(file)
+    reader.readAsDataURL(newFile)
+  } catch(e) { console.error('Compression error', e) }
 }
 
 function removeImage() {

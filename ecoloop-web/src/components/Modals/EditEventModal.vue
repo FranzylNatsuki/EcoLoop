@@ -193,12 +193,19 @@ function triggerFileInput() { fileInputRef.value?.click() }
 
 const selectedFile = ref<File | null>(null)
 
-function handleFileUpload(event: Event) {
+
+import imageCompression from 'browser-image-compression'
+async function handleFileUpload(event: Event) {
   const input = event.target as HTMLInputElement
   if (input.files && input.files[0]) {
     const file = input.files[0]
-    selectedFile.value = file
-    formData.value.bannerImage = URL.createObjectURL(file)
+    try {
+      const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' }
+      const compressed = await imageCompression(file, options)
+      const newFile = new File([compressed], file.name.replace(/\.[^/.]+$/, ".webp"), { type: 'image/webp' })
+      selectedFile.value = newFile
+      formData.value.bannerImage = URL.createObjectURL(newFile)
+    } catch (e) { console.error('Compression error:', e) }
   }
 }
 
