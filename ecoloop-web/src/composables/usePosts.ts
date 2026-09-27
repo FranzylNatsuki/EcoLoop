@@ -65,7 +65,7 @@ export function usePosts() {
       let query = supabase
         .from('cause_requests')
         .select(`
-          id, title, body, category, vote_count, comment_count, is_completed, created_at, author_id, latitude, longitude, location_address, post_type, type, is_cause,
+          id, title, body, category, vote_count, comment_count, is_completed, created_at, author_id, latitude, longitude, location_address,
           author:profiles!author_id (
             full_name,
             profile_data ( Avatar )

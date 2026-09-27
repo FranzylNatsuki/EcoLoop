@@ -171,7 +171,7 @@ export function useEvents() {
       let query = supabase
         .from('events')
         .select(`
-          id, title, event_title, event_date, schedule, location, description, banner_url, image, category, urgency_tag, fulfillment_percent, materials_needed, author_id, latitude, longitude, created_at,
+          id, title, event_date, location, description, banner_url, category, materials_needed, author_id, latitude, longitude, created_at,
           author:profiles!author_id (
             full_name,
             is_org,
