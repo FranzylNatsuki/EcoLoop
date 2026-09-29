@@ -156,6 +156,11 @@ async function handleFileUpload(event: Event) {
   if (!target.files || target.files.length === 0) return
 
   const file = target.files[0]
+  if (!file.type.startsWith('image/')) {
+    alert('Please upload image files only.')
+    return
+  }
+
   try {
     const options = { maxSizeMB: 0.3, maxWidthOrHeight: 800, useWebWorker: true, fileType: 'image/webp' }
     const compressed = await imageCompression(file, options)

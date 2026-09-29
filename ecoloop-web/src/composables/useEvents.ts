@@ -51,6 +51,7 @@ export interface EventItem {
   id: string
   event_title: string
   schedule: string
+  end_time?: string
   location: string
   latitude?: number | null
   longitude?: number | null
@@ -79,6 +80,7 @@ export interface CreateEventPayload {
   latitude?: number | null
   longitude?: number | null
   event_date: string
+  end_time?: string
   banner_url?: string
   materials_needed?: MaterialNeed[]
 }
@@ -146,6 +148,7 @@ export function useEvents() {
       followers_count: followersCount,
       event_title: row.title || 'Untitled Event',
       schedule: row.event_date || '',
+      end_time: row.end_time || '',
       location: row.location || 'Location TBA',
       latitude: row.latitude,
       longitude: row.longitude,

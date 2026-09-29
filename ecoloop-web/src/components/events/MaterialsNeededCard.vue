@@ -11,6 +11,7 @@ defineProps<{
     unit: string
     image?: string
   }>
+  isAuthor?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -36,6 +37,7 @@ function handleDonate(materialName: string) {
       <MaterialRow
         v-for="(item, index) in materials"
         :key="index"
+        :is-author="isAuthor"
         :material="{
           name: item.material || item.name || 'Material',
           description: item.description || '',

@@ -44,7 +44,7 @@ function handleListingAction(event: MouseEvent) {
 
 const showShareToast = ref(false)
 async function handleShare() {
-  const url = `${window.location.origin}/post/${listingData.value?.id || ''}`
+  const url = `${window.location.origin}/marketplace/${listingData.value?.id || ''}`
   try {
     await navigator.clipboard.writeText(url)
     showShareToast.value = true

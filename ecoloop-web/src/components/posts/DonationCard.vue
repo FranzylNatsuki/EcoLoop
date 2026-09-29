@@ -12,7 +12,7 @@ const router = useRouter() // 2. Initialize router
 const goToDetails = () => {
   if (!props.pledge?.id) return
   if (props.pledge.pledgeType === 'event') {
-    // For now, event pledges do not have a dedicated detail page.
+    router.push(`/pledge/${props.pledge.id}?type=event`)
     return
   }
   router.push(`/pledge/${props.pledge.id}`)
@@ -38,7 +38,7 @@ const itemSummary = computed(() => {
 
 <template>
   <!-- 4. Add the click handler to the root div -->
-  <div class="donation-card" :class="{ 'is-clickable': pledge.pledgeType !== 'event' }" @click="goToDetails">
+  <div class="donation-card is-clickable" @click="goToDetails">
     <div class="card-icon">
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#778732" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>

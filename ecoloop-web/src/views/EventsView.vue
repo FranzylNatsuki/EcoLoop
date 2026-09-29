@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useEvents } from '../composables/useEvents'
 import { useSort, getHotnessScore } from '../composables/useSort'
+import { useToast } from '../composables/useToast'
 import type { EventItem } from '../types/event'
 
 import CategoryBar from '../components/layout/CategoryBar.vue'
@@ -29,6 +30,7 @@ const route = useRoute()
 const router = useRouter()
 const { events, fetchEvents, fetchEventById, loading, updateEvent } = useEvents()
 const { selectedSort } = useSort()
+const { addToast } = useToast()
 
 const currentUserId = ref<string | null>(null)
 
@@ -189,16 +191,18 @@ async function handleEditEvent(payload: { event: any; materials: any[] }) {
     location: payload.event.location,
     latitude: payload.event.latitude,
     longitude: payload.event.longitude,
-    event_date: payload.event.date + 'T' + payload.event.startTime + ':00',
+    event_date: new Date(`${payload.event.date}T${payload.event.startTime}:00`).toISOString(),
+    end_time: new Date(`${payload.event.date}T${payload.event.endTime}:00`).toISOString(),
     banner_url: finalBannerUrl,
     materials_needed: payload.materials
   })
   
   if (result.success) {
     isEditModalOpen.value = false
+    addToast('Event updated successfully!', 'success')
     await loadPageData()
   } else {
-    alert('Failed to update event: ' + result.error)
+    addToast('Failed to update event: ' + result.error, 'error')
   }
 }
 
@@ -258,7 +262,7 @@ watch(
             <p class="description-text">{{ eventDetail.description }}</p>
           </div>
 
-          <MaterialsNeededCard :materials="eventDetail.materials_needed" @open-donate="handleOpenDonateModal" />
+          <MaterialsNeededCard :materials="eventDetail.materials_needed" :is-author="currentUserId === eventDetail.author_id" @open-donate="handleOpenDonateModal" />
           <RecentDonationsCard :pledges="eventDetail.recent_pledges" />
         </div>
       </template>

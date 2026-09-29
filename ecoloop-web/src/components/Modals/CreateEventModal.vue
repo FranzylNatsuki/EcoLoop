@@ -164,6 +164,11 @@ async function handleFileUpload(event: Event) {
   const input = event.target as HTMLInputElement
   if (input.files && input.files[0]) {
     const file = input.files[0]
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload image files only.')
+      return
+    }
+
     try {
       const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' }
       const compressed = await imageCompression(file, options)
@@ -186,7 +191,11 @@ const newMatQty = ref<number | null>(null)
 const newMatUnit = ref('pcs')
 
 function addMaterial() {
-  if (newMatName.value && newMatQty.value) {
+  if (newMatName.value && newMatQty.value !== null) {
+    if (newMatQty.value <= 0) {
+      alert('Event materials quantity should not be 0')
+      return
+    }
     materialsList.value.push({
       name: newMatName.value,
       qty: newMatQty.value,
@@ -207,6 +216,18 @@ function handleNextStep() {
 }
 
 function submitFinalEvent() {
+  // Try to add whatever is in the input fields before submitting
+  if (newMatName.value && newMatQty.value !== null) {
+    if (newMatQty.value > 0) {
+      addMaterial()
+    }
+  }
+
+  if (materialsList.value.length === 0) {
+    alert('Event materials should not be empty, please add at least one material.')
+    return
+  }
+
   // Map our temporary materials array to the format useEvents expects
   const formattedMaterials = materialsList.value.map(m => ({
     material: m.name,

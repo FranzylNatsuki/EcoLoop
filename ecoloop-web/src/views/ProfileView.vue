@@ -19,6 +19,7 @@ const profileData = ref<any>(null)
 const isLoading = ref(true)
 const isEditModalOpen = ref(false)
 const userPledges = ref<any[]>([])
+const receivedPledges = ref<any[]>([])
 const userListings = ref<any[]>([])
 const userRequests = ref<any[]>([])
 const isLoadingUserRequests = ref(false)
@@ -189,6 +190,40 @@ onMounted(async () => {
     combinedPledges.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
     userPledges.value = combinedPledges
+
+    // --- FETCH RECEIVED PLEDGES ---
+    const { data: rPledgesData } = await supabase
+      .from('pledges')
+      .select(`
+        *,
+        post:cause_requests!inner(title, author_id),
+        items:pledge_items(material_name, quantity, unit)
+      `)
+      .eq('cause_requests.author_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    const { data: rEventPledgesData } = await supabase
+      .from('event_pledges')
+      .select(`
+        *,
+        post:events!inner(title, author_id),
+        items:event_pledge_items(material_name, quantity, unit)
+      `)
+      .eq('events.author_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(20)
+
+    let combinedReceived: any[] = []
+    if (rPledgesData) {
+      combinedReceived = [...combinedReceived, ...rPledgesData.map((pl: any) => ({ ...pl, pledgeType: 'cause' }))]
+    }
+    if (rEventPledgesData) {
+      combinedReceived = [...combinedReceived, ...rEventPledgesData.map((pl: any) => ({ ...pl, pledgeType: 'event' }))]
+    }
+    combinedReceived.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    receivedPledges.value = combinedReceived
+    // ------------------------------
 
     const { data: listingsData, error: listingsError } = await supabase
           .from('marketplace_listings')
@@ -484,7 +519,14 @@ const requestStats = computed(() => ({
           :class="{ active: activeTab === 'donations' }"
           @click="setActiveTab('donations')"
         >
-          Donations
+          My Donations
+        </button>
+        <button
+          class="tab-btn"
+          :class="{ active: activeTab === 'received' }"
+          @click="setActiveTab('received')"
+        >
+          Received Donations
         </button>
         <button
           class="tab-btn"
@@ -537,6 +579,15 @@ const requestStats = computed(() => ({
           <div v-if="userPledges.length === 0" class="empty-state">No completed donations yet.</div>
           <DonationCard
             v-for="pledge in userPledges"
+            :key="pledge.id"
+            :pledge="pledge"
+          />
+        </template>
+
+        <template v-else-if="activeTab === 'received'">
+          <div v-if="receivedPledges.length === 0" class="empty-state">No donations received yet.</div>
+          <DonationCard
+            v-for="pledge in receivedPledges"
             :key="pledge.id"
             :pledge="pledge"
           />

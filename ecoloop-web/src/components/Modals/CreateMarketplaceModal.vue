@@ -50,7 +50,7 @@ const mapContainer = ref<HTMLElement | null>(null)
 let mapInstance: L.Map | null = null
 let markerInstance: L.Marker | null = null
 
-const categories = ['Plastics', 'Glass', 'Paper/Cardboard', 'Metal', 'Electronics', 'Wood & Timber', 'Textiles', 'Furniture', 'Appliances', 'Upcycled Goods', 'Other']
+const categories = ['Plastics', 'Glass', 'Paper/Cardboard', 'Metal', 'Electronics']
 const pricingStructures = [
   'Per Unit / kg',
   'Bulk Bundle (e.g., per 20 pcs)',
@@ -163,9 +163,15 @@ async function handleFileUpload(event: Event) {
   if (!target.files) return
 
   const files = Array.from(target.files)
+  const validFiles = files.filter(f => f.type.startsWith('image/'))
+  if (validFiles.length !== files.length) {
+    alert('Please upload image files only.')
+    if (validFiles.length === 0) return
+  }
+
   const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' }
 
-  for (const file of files) {
+  for (const file of validFiles) {
     try {
       const compressed = await imageCompression(file, options)
       const newFile = new File([compressed], file.name.replace(/\.[^/.]+$/, ".webp"), { type: 'image/webp' })

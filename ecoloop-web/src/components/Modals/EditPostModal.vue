@@ -156,9 +156,15 @@ async function handleFileUpload(event: Event) {
   if (!target.files) return
 
   const files = Array.from(target.files)
+  const validFiles = files.filter(f => f.type.startsWith('image/'))
+  if (validFiles.length !== files.length) {
+    alert('Please upload image files only.')
+    if (validFiles.length === 0) return
+  }
+
   const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' }
 
-  for (const file of files) {
+  for (const file of validFiles) {
     try {
       const compressed = await imageCompression(file, options)
       const newFile = new File([compressed], file.name.replace(/\.[^/.]+$/, ".webp"), { type: 'image/webp' })
@@ -210,12 +216,13 @@ async function handleSubmit() {
 
     if (updateError) throw updateError
 
-    // 2. Delete Removed Images
-    if (imagesToDelete.value.length > 0) {
-      await supabase.from('post_images').delete().in('id', imagesToDelete.value)
-    }
+    // 2. Delete ALL existing image records to replace them
+    await supabase.from('post_images').delete().eq('post_id', props.postId)
 
-    // 3. Upload & Insert New Images
+    // Collect all final URLs starting with the retained ones
+    const finalUrls = existingImages.value.map(img => img.image_url)
+
+    // 3. Upload New Images
     for (const file of newImageFiles.value) {
       const fileExt = file.name.split('.').pop()
       const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`
@@ -225,12 +232,18 @@ async function handleSubmit() {
 
       if (!uploadError) {
         const { data } = supabase.storage.from('images').getPublicUrl(filePath)
-        await supabase.from('post_images').insert({
-          post_id: props.postId,
-          image_url: data.publicUrl,
-          display_order: 99
-        })
+        finalUrls.push(data.publicUrl)
       }
+    }
+
+    // 4. Insert final combined image records
+    if (finalUrls.length > 0) {
+      const imageRecords = finalUrls.map((url, idx) => ({
+        post_id: props.postId,
+        image_url: url,
+        display_order: idx
+      }))
+      await supabase.from('post_images').insert(imageRecords)
     }
 
     // Success! Reset and close

@@ -147,7 +147,11 @@ const feed = computed(() => {
     })
   }
 
-  return combined
+  return combined.sort((a, b) => {
+    const dateA = new Date((a.item as any).created_at || (a.item as any).schedule || 0).getTime()
+    const dateB = new Date((b.item as any).created_at || (b.item as any).schedule || 0).getTime()
+    return dateB - dateA
+  })
 })
 
 const sidebarEvents = computed(() => events.value.slice(0, 5))

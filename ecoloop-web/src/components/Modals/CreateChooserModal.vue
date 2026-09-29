@@ -121,7 +121,8 @@
           location: payload.event.location,
           latitude: payload.event.latitude || null,
           longitude: payload.event.longitude || null,
-          event_date: `${payload.event.date}T${payload.event.startTime || '00:00'}:00`,
+          event_date: new Date(`${payload.event.date}T${payload.event.startTime || '00:00'}:00`).toISOString(),
+          end_time: new Date(`${payload.event.date}T${payload.event.endTime || '00:00'}:00`).toISOString(),
           banner_url: finalBannerUrl,
           materials_needed: formattedMaterials
         })

@@ -167,6 +167,19 @@ onMounted(async () => {
     }
   }
 })
+
+async function handleDeletePost() {
+  if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) return
+  try {
+    const { error } = await supabase.from('cause_requests').delete().eq('id', props.postId)
+    if (error) throw error
+    alert('Post deleted successfully.')
+    window.location.reload()
+  } catch (err) {
+    console.error('Failed to delete post:', err)
+    alert('Failed to delete post.')
+  }
+}
 </script>
 
 <template>
@@ -194,7 +207,6 @@ onMounted(async () => {
       Link Copied to Clipboard
     </div>
 
-    <!-- Disabled State Check added here -->
     <button
       v-if="!isOwner"
       class="btn-donate"
@@ -205,9 +217,14 @@ onMounted(async () => {
       {{ isCompleted ? 'Goal Reached' : 'Donate' }}
     </button>
 
-    <button v-if="isOwner" class="btn-manage" @click.stop="showEditModal = true">
-      Edit Post
-    </button>
+    <div v-if="isOwner" class="owner-actions">
+      <button class="btn-manage" @click.stop="showEditModal = true">
+        Edit Post
+      </button>
+      <button class="btn-delete" @click.stop="handleDeletePost">
+        Delete
+      </button>
+    </div>
 
     <!-- Modals -->
     <DonateMaterialsModal
@@ -333,6 +350,30 @@ onMounted(async () => {
 }
 .btn-manage:hover {
   background: #e4eadb;
+}
+
+.owner-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.btn-delete {
+  height: 32px;
+  padding: 0 16px;
+  background: transparent;
+  border: 1px solid #d32f2f;
+  border-radius: 8px;
+  color: #d32f2f;
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+.btn-delete:hover {
+  background: #ffebeb;
 }
 
 .share-toast {

@@ -50,6 +50,13 @@ function materialQuantity(material: MaterialOption) {
   return material.quantity ?? material.target
 }
 
+const maxQuantity = computed(() => {
+  const selected = availableMaterials.value.find(m => materialName(m) === selectedMaterial.value)
+  if (!selected) return 1
+  const qty = materialQuantity(selected)
+  return qty ? Number(qty) : 1
+})
+
 watch(() => props.modelValue, async (open) => {
   if (open) {
     selectedMaterial.value = materialName(availableMaterials.value[0])
@@ -71,6 +78,17 @@ function handleBackdropClick(event: MouseEvent) {
 
 async function submit() {
   if (isSubmitting.value || !props.post?.id) return
+  
+  if (requestedQuantity.value <= 0) {
+    addToast('Quantity must be at least 1.', 'error')
+    return
+  }
+  
+  if (requestedQuantity.value > maxQuantity.value) {
+    addToast(`You cannot request more than the available inventory (${maxQuantity.value}).`, 'error')
+    return
+  }
+  
   isSubmitting.value = true
 
   try {
@@ -191,7 +209,7 @@ ${messageText.value}`;
 
           <label class="form-group">
             <span class="field-label">Qty</span>
-            <input v-model.number="requestedQuantity" class="input-box" type="number" min="1" required />
+            <input v-model.number="requestedQuantity" class="input-box" type="number" min="1" :max="maxQuantity" required />
           </label>
         </div>
 

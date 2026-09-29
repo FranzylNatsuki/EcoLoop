@@ -137,12 +137,26 @@ watch(isOpen, async (open) => {
       formData.value.category = props.initialData.category || ''
       
       const evtDate = new Date(props.initialData.schedule || Date.now())
-      formData.value.date = evtDate.toISOString().split('T')[0]
+      
+      const yyyy = evtDate.getFullYear()
+      const mm = String(evtDate.getMonth() + 1).padStart(2, '0')
+      const dd = String(evtDate.getDate()).padStart(2, '0')
+      formData.value.date = `${yyyy}-${mm}-${dd}`
+      
       formData.value.startTime = evtDate.toTimeString().substring(0, 5)
       
-      // Since end time isn't stored separately, default it to 2 hours after start if missing
-      const endDate = new Date(evtDate.getTime() + 2 * 60 * 60 * 1000)
-      formData.value.endTime = endDate.toTimeString().substring(0, 5)
+      if (props.initialData.end_time) {
+        // If end_time is provided (like "14:30:00" or a full ISO string)
+        if (props.initialData.end_time.includes('T')) {
+          const endDate = new Date(props.initialData.end_time)
+          formData.value.endTime = endDate.toTimeString().substring(0, 5)
+        } else {
+          formData.value.endTime = props.initialData.end_time.substring(0, 5)
+        }
+      } else {
+        const endDate = new Date(evtDate.getTime() + 2 * 60 * 60 * 1000)
+        formData.value.endTime = endDate.toTimeString().substring(0, 5)
+      }
       
       formData.value.organizer = props.initialData.organizer?.name || 'Community Organizer'
       
@@ -199,6 +213,11 @@ async function handleFileUpload(event: Event) {
   const input = event.target as HTMLInputElement
   if (input.files && input.files[0]) {
     const file = input.files[0]
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload image files only.')
+      return
+    }
+
     try {
       const options = { maxSizeMB: 0.3, maxWidthOrHeight: 1200, useWebWorker: true, fileType: 'image/webp' }
       const compressed = await imageCompression(file, options)
@@ -220,7 +239,11 @@ const newMatQty = ref<number | null>(null)
 const newMatUnit = ref('pcs')
 
 function addMaterial() {
-  if (newMatName.value && newMatQty.value) {
+  if (newMatName.value && newMatQty.value !== null) {
+    if (newMatQty.value <= 0) {
+      alert('Event materials quantity should not be 0')
+      return
+    }
     materialsList.value.push({
       name: newMatName.value,
       qty: newMatQty.value,
@@ -241,6 +264,18 @@ function handleNextStep() {
 }
 
 function submitFinalEvent() {
+  // Try to add whatever is in the input fields before submitting
+  if (newMatName.value && newMatQty.value !== null) {
+    if (newMatQty.value > 0) {
+      addMaterial()
+    }
+  }
+
+  if (materialsList.value.length === 0) {
+    alert('Event materials should not be empty, please add at least one material.')
+    return
+  }
+
   // Map our temporary materials array to the format useEvents expects
   const formattedMaterials = materialsList.value.map(m => ({
     material: m.name,

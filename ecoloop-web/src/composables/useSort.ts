@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 
-const selectedSort = ref('Hot')
+const selectedSort = ref('New')
 
 export function getHotnessScore(item: any): number {
   if (!item) return 0

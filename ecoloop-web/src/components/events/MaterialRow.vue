@@ -10,6 +10,7 @@ const props = defineProps<{
     unit: string
     image?: string
   }
+  isAuthor?: boolean
 }>()
 
 const emit = defineEmits(['donate'])
@@ -39,7 +40,7 @@ const percent = computed(() => {
         </div>
       </div>
 
-      <button class="donate-pill-btn" @click="emit('donate')">
+      <button v-if="!isAuthor" class="donate-pill-btn" @click="emit('donate')">
         Donate
       </button>
     </div>
