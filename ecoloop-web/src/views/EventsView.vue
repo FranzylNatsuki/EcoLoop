@@ -203,7 +203,7 @@ async function handleEditEvent(payload: { event: any; materials: any[] }) {
       const { data: followers } = await supabase
         .from('event_followers')
         .select('user_id')
-        .eq('event_id', eventDetail.value.id)
+        .eq('event_id', eventDetail.value?.id)
       
       if (followers && followers.length > 0) {
         const notifs = followers.map(f => ({
@@ -211,7 +211,7 @@ async function handleEditEvent(payload: { event: any; materials: any[] }) {
           type: 'event_update',
           title: 'Event Update',
           message: `The event "${payload.event.title}" has been updated.`,
-          link: `/events/${eventDetail.value.id}`
+          link: `/events/${eventDetail.value?.id}`
         }))
         await supabase.from('notifications').insert(notifs)
       }
