@@ -46,10 +46,18 @@ export function useNotifications() {
       .order('created_at', { ascending: false })
       .limit(10)
 
+    const { data: dbNotifs } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
+
     let combined: any[] = []
 
     if (pledgesData) combined = [...combined, ...pledgesData.map(n => ({ ...n, pledgeType: 'cause' }))]
     if (eventPledgesData) combined = [...combined, ...eventPledgesData.map(n => ({ ...n, pledgeType: 'event' }))]
+    if (dbNotifs) combined = [...combined, ...dbNotifs.map(n => ({ ...n, pledgeType: 'db_notif' }))]
     
     if (purchaseData && purchaseData.length > 0) {
       const buyerIds = [...new Set(purchaseData.map(r => r.buyer_id).filter(Boolean))]
@@ -76,14 +84,28 @@ export function useNotifications() {
     // Evaluate unread logic
     const lastCheckStr = localStorage.getItem('last_notif_check')
     const lastCheck = lastCheckStr ? new Date(lastCheckStr).getTime() : 0
-    hasUnread.value = notifications.value.some(n => new Date(n.created_at).getTime() > lastCheck)
+    
+    // We can also check actual `is_read` on db_notifs but mixing approaches is fine here
+    hasUnread.value = notifications.value.some(n => {
+      if (n.pledgeType === 'db_notif' && n.is_read === false) return true;
+      return new Date(n.created_at).getTime() > lastCheck
+    })
 
     isLoading.value = false
   }
 
-  const markAsRead = () => {
+  const markAsRead = async () => {
     localStorage.setItem('last_notif_check', new Date().toISOString())
     hasUnread.value = false
+    
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session) {
+      await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', session.user.id)
+        .eq('is_read', false)
+    }
   }
 
   return {

@@ -198,6 +198,27 @@ async function handleEditEvent(payload: { event: any; materials: any[] }) {
   })
   
   if (result.success) {
+    // Notify followers
+    try {
+      const { data: followers } = await supabase
+        .from('event_followers')
+        .select('user_id')
+        .eq('event_id', eventDetail.value.id)
+      
+      if (followers && followers.length > 0) {
+        const notifs = followers.map(f => ({
+          user_id: f.user_id,
+          type: 'event_update',
+          title: 'Event Update',
+          message: `The event "${payload.event.title}" has been updated.`,
+          link: `/events/${eventDetail.value.id}`
+        }))
+        await supabase.from('notifications').insert(notifs)
+      }
+    } catch (err) {
+      console.error('Failed to notify followers', err)
+    }
+
     isEditModalOpen.value = false
     addToast('Event updated successfully!', 'success')
     await loadPageData()
