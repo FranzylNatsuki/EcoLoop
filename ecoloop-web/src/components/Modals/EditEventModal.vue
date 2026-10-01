@@ -349,7 +349,7 @@ function submitFinalEvent() {
               <div class="form-group">
                 <span class="field-label">Banner Image</span>
                 <div class="photo-grid">
-                  <button type="button" class="upload-target-box" @click="triggerFileInput">
+                  <button v-if="!formData.bannerImage" type="button" class="upload-target-box" @click="triggerFileInput">
                     <Camera :size="24" color="#8F9A8F" />
                     <span class="upload-label">Upload Banner Image</span>
                   </button>

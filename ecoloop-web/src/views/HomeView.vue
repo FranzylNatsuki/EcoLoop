@@ -127,8 +127,10 @@ const feed = computed(() => {
 
   if (selectedSort.value === 'New') {
     return combined.sort((a, b) => {
-      const dateA = new Date((a.item as any).created_at || (a.item as any).schedule || 0).getTime()
-      const dateB = new Date((b.item as any).created_at || (b.item as any).schedule || 0).getTime()
+      const d1 = (a.item as any).created_at || (a.item as any).timestamp || (a.item as any).schedule || (a.item as any).event_date || 0
+      const d2 = (b.item as any).created_at || (b.item as any).timestamp || (b.item as any).schedule || (b.item as any).event_date || 0
+      const dateA = new Date(d1).getTime() || 0
+      const dateB = new Date(d2).getTime() || 0
       return dateB - dateA
     })
   }
@@ -148,8 +150,10 @@ const feed = computed(() => {
   }
 
   return combined.sort((a, b) => {
-    const dateA = new Date((a.item as any).created_at || (a.item as any).schedule || 0).getTime()
-    const dateB = new Date((b.item as any).created_at || (b.item as any).schedule || 0).getTime()
+    const d1 = (a.item as any).created_at || (a.item as any).timestamp || (a.item as any).schedule || (a.item as any).event_date || 0
+    const d2 = (b.item as any).created_at || (b.item as any).timestamp || (b.item as any).schedule || (b.item as any).event_date || 0
+    const dateA = new Date(d1).getTime() || 0
+    const dateB = new Date(d2).getTime() || 0
     return dateB - dateA
   })
 })

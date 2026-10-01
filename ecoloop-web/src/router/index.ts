@@ -99,4 +99,11 @@ const router = createRouter({
   ],
 })
 
+// Automatically handle Vite dynamic import chunk failures (usually caused by new deployments)
+router.onError((error, to) => {
+  if (error.message.includes('Failed to fetch dynamically imported module') || error.name === 'ChunkLoadError') {
+    window.location.href = to.fullPath
+  }
+})
+
 export default router

@@ -171,13 +171,30 @@ onMounted(async () => {
 async function handleDeletePost() {
   if (!confirm('Are you sure you want to delete this post? This action cannot be undone.')) return
   try {
-    const { error } = await supabase.from('cause_requests').delete().eq('id', props.postId)
+    // Aggressively delete all possible dependencies to avoid Foreign Key constraint errors
+    await supabase.from('post_likes').delete().eq('post_id', props.postId)
+    await supabase.from('pledges').delete().eq('post_id', props.postId)
+    await supabase.from('post_comments').delete().eq('post_id', props.postId)
+    await supabase.from('post_images').delete().eq('post_id', props.postId)
+    
+    // Then delete the post itself, requesting the count of deleted rows
+    const { error, count } = await supabase
+      .from('cause_requests')
+      .delete({ count: 'exact' })
+      .eq('id', props.postId)
+      
     if (error) throw error
+    
+    if (count === 0) {
+      alert('Delete failed: RLS Policy blocked it! You need to add a DELETE policy for cause_requests in Supabase.')
+      return
+    }
+
     alert('Post deleted successfully.')
     window.location.reload()
-  } catch (err) {
+  } catch (err: any) {
     console.error('Failed to delete post:', err)
-    alert('Failed to delete post.')
+    alert('Failed to delete post: ' + (err.message || 'Unknown error. Check console.'))
   }
 }
 </script>

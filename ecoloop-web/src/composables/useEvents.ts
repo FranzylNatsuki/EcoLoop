@@ -57,6 +57,7 @@ export interface EventItem {
   longitude?: number | null
   description: string
   category: string
+  created_at: string
   followers_count?: number
   image: string
   materials_needed: MaterialNeed[]
@@ -154,6 +155,7 @@ export function useEvents() {
       longitude: row.longitude,
       description: row.description || '',
       category: row.category || 'General',
+      created_at: row.created_at || new Date().toISOString(),
       image: row.banner_url || '',
       materials_needed: row.materials_needed || [],
       fulfillment_percent: fulfillmentPercent,

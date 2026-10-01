@@ -5,6 +5,7 @@ import VotePanel from './VotePanel.vue'
 import PostActions from './PostActions.vue'
 import PostActionsMarket from './PostActionsMarket.vue'
 import MarketplaceInquiryModal from '../Modals/MarketplaceInquiryModal.vue'
+import { MapPin } from 'lucide-vue-next'
 
 // 1. Updated interface to match the Supabase data
 interface PostImage {
@@ -25,8 +26,9 @@ interface Post {
   postType?: string
   price?: number | string
   pricingStructure?: string
-  created_at: string       // Changed from createdAt
-  author: { full_name: string; Avatar: string } // Changed from name/avatar
+  created_at: string
+  location_address?: string
+  author: { full_name: string; Avatar: string }
 }
 
 const props = defineProps<{ post: Post }>()
@@ -71,6 +73,15 @@ function openPost() {
         <!-- Updated: createdAt -> created_at (and formatted for readability) -->
         <span class="time-ago">{{ new Date(post.created_at).toLocaleDateString() }}</span>
         <span class="category">{{ post.category }}</span>
+
+        <!-- Location Badge -->
+        <template v-if="post.location_address">
+          <span class="meta-dot">•</span>
+          <span class="location-text">
+            <MapPin :size="12" class="location-icon" />
+            {{ post.location_address }}
+          </span>
+        </template>
       </div>
 
       <h2>{{ post.title }}</h2>
@@ -154,6 +165,18 @@ function openPost() {
 
 .meta-dot {
   color: #8f9a8f;
+}
+
+.location-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #8f9a8f;
+  font-size: 0.8rem;
+}
+
+.location-icon {
+  margin-bottom: 2px;
 }
 
 .category {

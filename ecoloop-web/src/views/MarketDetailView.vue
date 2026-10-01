@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch, nextTick } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Share2, ChevronLeft, ChevronRight } from 'lucide-vue-next'
+import { Share2, ChevronLeft, ChevronRight, MapPin } from 'lucide-vue-next'
 import { supabase } from '../composables/useAuth'
 import { useToast } from '../composables/useToast'
 import PageLayout from '../components/layout/PageLayout.vue'
@@ -602,6 +602,14 @@ async function handleShare() {
             <p class="listing-meta">
               Posted by {{ post.author?.full_name || 'Unknown User' }}
               · {{ new Date(post.created_at).toLocaleDateString() }}
+              
+              <template v-if="post.location_address">
+                · 
+                <span class="location-text">
+                  <MapPin :size="12" class="location-icon" />
+                  {{ post.location_address }}
+                </span>
+              </template>
             </p>
           </div>
           <div class="action-buttons">
@@ -866,6 +874,8 @@ async function handleShare() {
 .category-label { color: #778732; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 h1 { margin: 8px 0; color: #1a1d1a; }
 .listing-meta, .muted-text { color: #8f9a8f; font-size: 13px; }
+.location-text { display: inline-flex; align-items: center; gap: 4px; }
+.location-icon { margin-bottom: 2px; }
 .action-buttons { display: flex; align-items: center; gap: 8px; }
 .buy-button { flex-shrink: 0; border: none; border-radius: 8px; background: #778732; color: #fff; padding: 11px 16px; font-weight: 700; cursor: pointer; }
 .share-button-icon { display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border: 1px solid #e4e7e3; border-radius: 8px; background: #fff; color: #525a52; cursor: pointer; transition: all 0.2s ease; }

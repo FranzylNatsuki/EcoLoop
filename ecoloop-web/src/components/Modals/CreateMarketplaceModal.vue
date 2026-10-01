@@ -218,7 +218,20 @@ function resetForm() {
 }
 
 function handleSubmit() {
-  if (!title.value.trim() || !description.value.trim()) return
+  if (!title.value.trim() || !description.value.trim()) {
+    alert('Please provide a title and description.')
+    return
+  }
+  
+  if (pricingType.value === 'For Sale' && (price.value === null || price.value === undefined || price.value < 0)) {
+    alert('Please enter a valid price for your listing.')
+    return
+  }
+
+  if (quantity.value === null || quantity.value === undefined || quantity.value <= 0) {
+    alert('Please enter a valid quantity.')
+    return
+  }
 
   emit('publish', {
     title: title.value.trim(),

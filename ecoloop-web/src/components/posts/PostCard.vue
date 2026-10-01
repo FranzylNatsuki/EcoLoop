@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 // import VotePanel from './VotePanel.vue'
 import PostActions from './PostActions.vue'
 import { supabase } from '../../composables/useAuth'
+import { MapPin } from 'lucide-vue-next'
 
 interface PostImage {
   image_url: string
@@ -83,6 +84,15 @@ function openPost() {
           Completed
         </span>
         <span v-else class="category">{{ post.category }}</span>
+
+        <!-- Location Badge -->
+        <template v-if="post.location_address">
+          <span class="meta-dot">•</span>
+          <span class="location-text">
+            <MapPin :size="12" class="location-icon" />
+            {{ post.location_address }}
+          </span>
+        </template>
       </div>
 
       <h2>{{ post.title }}</h2>
@@ -167,6 +177,18 @@ function openPost() {
 
 .meta-dot {
   color: #8f9a8f;
+}
+
+.location-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #8f9a8f;
+  font-size: 0.8rem;
+}
+
+.location-icon {
+  margin-bottom: 2px;
 }
 
 .category {
