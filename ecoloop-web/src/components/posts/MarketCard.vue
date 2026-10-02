@@ -55,7 +55,7 @@ const extraImagesCount = computed(() => {
 })
 
 function openPost() {
-  router.push(`/post/${props.post.id}`)
+  router.push(`/marketplace/${props.post.id}`)
 }
 </script>
 

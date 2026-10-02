@@ -1,4 +1,4 @@
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { supabase } from './useAuth'
 
     export interface Author {
@@ -161,10 +161,6 @@ import { supabase } from './useAuth'
           throw err
         }
       }
-
-      onMounted(() => {
-        if (listings.value.length === 0) fetchListings()
-      })
 
       return { listings, fetchListings, addListing }
     }

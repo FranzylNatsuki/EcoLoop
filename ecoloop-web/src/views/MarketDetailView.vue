@@ -362,7 +362,7 @@ async function loadPage() {
 }
 
 
-async function updateListingStatus(status: 'sold' | 'available' | 'cancelled') {
+async function updateListingStatus(status: 'sold' | 'available' | 'archived') {
   if (!isOwner.value || !post.value || isUpdatingListing.value) return
   
   const actionText = status === 'sold' ? 'mark this listing as SOLD' 
@@ -759,7 +759,7 @@ async function handleShare() {
           <button type="button" class="btn-secondary" :disabled="isUpdatingListing" @click="updateListingStatus('available')">Mark Available</button>
           <button type="button" class="btn-secondary" :disabled="isUpdatingListing" @click="updateListingStatus('sold')">Mark Sold</button>
           <button type="button" class="btn-primary" @click="showEditModal = true">Edit Details</button>
-          <button type="button" class="btn-danger" :disabled="isUpdatingListing" @click="updateListingStatus('cancelled')">Cancel Listing</button>
+          <button type="button" class="btn-danger" :disabled="isUpdatingListing" @click="updateListingStatus('archived')">Cancel Listing</button>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { supabase } from './useAuth'
 
 export interface Author {
@@ -567,12 +567,6 @@ export function useEvents() {
       return { success: false, error: err.message || err }
     }
   }
-
-  onMounted(() => {
-    if (events.value.length === 0) {
-      fetchEvents()
-    }
-  })
 
   return {
     events,

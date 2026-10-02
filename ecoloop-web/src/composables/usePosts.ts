@@ -1,4 +1,4 @@
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { supabase } from './useAuth'
 
 export interface Author {
@@ -151,12 +151,6 @@ export function usePosts() {
       console.error('Error saving post to Supabase:', err)
     }
   }
-
-  onMounted(() => {
-    if (posts.value.length === 0) {
-      fetchPosts()
-    }
-  })
 
   return {
     posts,

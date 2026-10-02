@@ -161,7 +161,7 @@ async function handleDonationSubmitted(payload: { pledgeId: string; quantity: nu
 
 async function handleEditEvent(payload: { event: any; materials: any[] }) {
   if (!eventDetail.value?.id) return
-  
+
   let finalBannerUrl = payload.event.bannerImage
 
   if (payload.event.rawFile) {
@@ -196,7 +196,7 @@ async function handleEditEvent(payload: { event: any; materials: any[] }) {
     banner_url: finalBannerUrl,
     materials_needed: payload.materials
   })
-  
+
   if (result.success) {
     // Notify followers
     try {
@@ -204,7 +204,7 @@ async function handleEditEvent(payload: { event: any; materials: any[] }) {
         .from('event_followers')
         .select('user_id')
         .eq('event_id', eventDetail.value?.id)
-      
+
       if (followers && followers.length > 0) {
         const notifs = followers.map(f => ({
           user_id: f.user_id,
@@ -337,7 +337,7 @@ watch(
   <template v-else>
     <CategoryBar type="events" />
 
-    
+
 
     <PageLayout>
       <template #main>
