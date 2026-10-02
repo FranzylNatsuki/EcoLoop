@@ -364,6 +364,12 @@ async function loadPage() {
 
 async function updateListingStatus(status: 'sold' | 'available' | 'cancelled') {
   if (!isOwner.value || !post.value || isUpdatingListing.value) return
+  
+  const actionText = status === 'sold' ? 'mark this listing as SOLD' 
+    : status === 'available' ? 'mark this listing as AVAILABLE' 
+    : 'CANCEL this listing';
+    
+  if (!confirm(`Are you sure you want to ${actionText}?`)) return
 
   isUpdatingListing.value = true
   try {
@@ -469,6 +475,8 @@ async function handleRequestSubmit() {
 
 async function handleAcceptRequest() {
   if (!selectedRequest.value || !post.value) return
+  
+  if (!confirm('Are you sure you want to ACCEPT this request? This will mark your listing as SOLD.')) return
 
   isUpdatingRequest.value = true
   try {
@@ -506,6 +514,8 @@ async function handleAcceptRequest() {
 
 async function handleRejectRequest() {
   if (!selectedRequest.value || selectedRequest.value.status !== 'pending') return
+  
+  if (!confirm('Are you sure you want to REJECT this request?')) return
 
   isUpdatingRequest.value = true
   try {
@@ -517,7 +527,7 @@ async function handleRejectRequest() {
     if (requestError) throw requestError
 
     await fetchPurchaseRequests()
-    addToast('Request accepted successfully!', 'success')
+    addToast('Request rejected successfully!', 'success')
     selectedRequest.value = null
   } catch (err: any) {
     console.error('Failed to reject purchase request:', err)

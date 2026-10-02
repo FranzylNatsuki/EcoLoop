@@ -47,14 +47,19 @@ function materialName(material: MaterialOption) {
 }
 
 function materialQuantity(material: MaterialOption) {
-  return material.quantity ?? material.target
+  // If the material has a specific quantity, use it.
+  if (material.quantity !== undefined && material.quantity !== null) return material.quantity;
+  if (material.target !== undefined && material.target !== null) return material.target;
+  // Fallback to the marketplace listing's overall quantity
+  if (props.post?.quantity !== undefined && props.post?.quantity !== null) return props.post.quantity;
+  return null;
 }
 
 const maxQuantity = computed(() => {
   const selected = availableMaterials.value.find(m => materialName(m) === selectedMaterial.value)
-  if (!selected) return 1
+  if (!selected) return props.post?.quantity ? Number(props.post.quantity) : 1
   const qty = materialQuantity(selected)
-  return qty ? Number(qty) : 1
+  return qty ? Number(qty) : (props.post?.quantity ? Number(props.post.quantity) : 1)
 })
 
 watch(() => props.modelValue, async (open) => {
@@ -120,6 +125,7 @@ ${messageText.value}`;
       post_id: props.post.id,
       seller_id: sellerId,
       buyer_id: currentUserId,
+      quantity: requestedQuantity.value,
       notes: finalNotes,
       status: 'pending'
     }
@@ -141,6 +147,12 @@ ${messageText.value}`;
     console.error('Failed to create purchase request:', error)
   } finally {
     isSubmitting.value = false
+  }
+}
+
+function blockInvalidNumberChars(e: KeyboardEvent) {
+  if (['e', 'E', '+', '-'].includes(e.key)) {
+    e.preventDefault()
   }
 }
 </script>
@@ -209,7 +221,7 @@ ${messageText.value}`;
 
           <label class="form-group">
             <span class="field-label">Qty</span>
-            <input v-model.number="requestedQuantity" class="input-box" type="number" min="1" :max="maxQuantity" required />
+            <input v-model.number="requestedQuantity" class="input-box" type="number" min="1" :max="maxQuantity" required @keydown="blockInvalidNumberChars" />
           </label>
         </div>
 

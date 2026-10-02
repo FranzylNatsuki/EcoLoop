@@ -4,7 +4,7 @@ import { computed, ref } from 'vue'
 import VotePanel from './VotePanel.vue'
 import PostActions from './PostActions.vue'
 import PostActionsMarket from './PostActionsMarket.vue'
-import MarketplaceInquiryModal from '../Modals/MarketplaceInquiryModal.vue'
+import BuyRequestModal from '../Modals/BuyRequestModal.vue'
 import { MapPin } from 'lucide-vue-next'
 
 // 1. Updated interface to match the Supabase data
@@ -108,7 +108,7 @@ function openPost() {
         :post-id="post.id"
       />
 
-      <MarketplaceInquiryModal
+      <BuyRequestModal
         v-model="isInquiryModalOpen"
         :post="post"
       />

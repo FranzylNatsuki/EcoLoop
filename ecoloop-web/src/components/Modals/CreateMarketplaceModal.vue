@@ -217,6 +217,12 @@ function resetForm() {
   if (fileInputRef.value) fileInputRef.value.value = ''
 }
 
+function blockInvalidNumberChars(e: KeyboardEvent) {
+  if (['e', 'E', '+', '-'].includes(e.key)) {
+    e.preventDefault()
+  }
+}
+
 function handleSubmit() {
   if (!title.value.trim() || !description.value.trim()) {
     alert('Please provide a title and description.')
@@ -224,12 +230,12 @@ function handleSubmit() {
   }
   
   if (pricingType.value === 'For Sale' && (price.value === null || price.value === undefined || price.value < 0)) {
-    alert('Please enter a valid price for your listing.')
+    alert('Price must be 0 or greater.')
     return
   }
 
   if (quantity.value === null || quantity.value === undefined || quantity.value <= 0) {
-    alert('Please enter a valid quantity.')
+    alert('Quantity must be 1 or greater.')
     return
   }
 
@@ -353,18 +359,31 @@ onUnmounted(() => window.removeEventListener('keydown', handleKeyDown))
                   min="0"
                   step="0.01"
                   placeholder="₱15"
+                  @keydown="blockInvalidNumberChars"
                 />
               </div>
 
               <div class="form-group">
                 <label for="listing-quantity">Quantity</label>
                 <div class="quantity-input">
-                  <input id="listing-quantity" v-model.number="quantity" class="form-control" type="number" min="0" placeholder="50" />
+                  <input 
+                    id="listing-quantity" 
+                    v-model.number="quantity" 
+                    class="form-control" 
+                    type="number" 
+                    min="0" 
+                    placeholder="50" 
+                    @keydown="blockInvalidNumberChars"
+                  />
                   <select v-model="quantityUnit" class="unit-select" aria-label="Quantity unit">
                     <option value="pcs">pcs</option>
                     <option value="kg">kg</option>
                     <option value="items">items</option>
                     <option value="lots">lots</option>
+                    <option value="bottles">bottles</option>
+                    <option value="packs">packs</option>
+                    <option value="boxes">boxes</option>
+                    <option value="sacks">sacks</option>
                   </select>
                 </div>
               </div>

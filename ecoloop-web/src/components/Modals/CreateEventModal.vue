@@ -211,6 +211,12 @@ function removeMaterial(index: number) {
   materialsList.value.splice(index, 1)
 }
 
+function blockInvalidNumberChars(e: KeyboardEvent) {
+  if (['e', 'E', '+', '-'].includes(e.key)) {
+    e.preventDefault()
+  }
+}
+
 function handleNextStep() {
   currentStep.value = 2
 }
@@ -382,14 +388,19 @@ function submitFinalEvent() {
               <label class="field-label">Add a Material</label>
               <div class="material-input-row">
                 <input v-model="newMatName" type="text" placeholder="e.g. Garbage Bags" class="input-box flex-2" />
-                <input v-model.number="newMatQty" type="number" placeholder="Qty" min="1" class="input-box flex-1" />
+                <input v-model.number="newMatQty" type="number" placeholder="Qty" min="1" class="input-box flex-1" @keydown="blockInvalidNumberChars" />
 
                 <div class="select-wrapper flex-1">
                   <select v-model="newMatUnit" class="dropdown-trigger">
                     <option value="pcs">pcs</option>
                     <option value="kg">kg</option>
                     <option value="sets">sets</option>
+                    <option value="items">items</option>
+                    <option value="lots">lots</option>
+                    <option value="bottles">bottles</option>
                     <option value="packs">packs</option>
+                    <option value="boxes">boxes</option>
+                    <option value="sacks">sacks</option>
                   </select>
                   <ChevronDown :size="16" class="dropdown-chevron" />
                 </div>

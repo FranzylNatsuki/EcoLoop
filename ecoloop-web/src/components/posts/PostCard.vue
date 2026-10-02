@@ -21,6 +21,7 @@ interface Post {
   category: string
   created_at: string
   is_completed: boolean // <-- Added completion state
+  location_address?: string
   author_id?: string
   author: {
     id?: string;
