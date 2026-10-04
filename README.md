@@ -1,4 +1,4 @@
-Last update: 5:49 PM Sep 22, 2026
+Last update: 10:14 PM Oct 4, 2026
 
 # EcoLoop
 
@@ -88,7 +88,10 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * DonationCard.vue
 * EventCard.vue - Event component card
 * PostActions.vue - comments, share, and donate
+* PostActionsMarket.vue
 * PostCard.vue - Post component
+* MarketCard.vue
+* UserCard.vue
 * VotePanel.vue - reddit votes ahh
 * PostCommentItem.vue
 * PostCommentSection.vue
@@ -116,6 +119,7 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * ProjectLocationCard.vue
 * RecentDonationsCard.vue
 * RelatedEventsCard.vue
+* RelatedEventItem.vue
 
 `src/components/marketplace` *marketplace contents*
 * MarketplaceCard.vue - item container
@@ -132,6 +136,8 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * ThankYouDonationModal.vue
 * EditProfileModal.vue
 * EditPostModal.vue
+* EditEventModal.vue
+* MarketplaceInquiryModal.vue
 
 `src/views` *individual pages*
 * HomeView.vue - home page component
@@ -142,6 +148,7 @@ VITE_SUPABASE_ANON_KEY=[insertkeyhere]
 * PledgeDetailView.vue
 * ProfileView.vue
 * PublicProfileView.vue
+* MarketOnlyView.vue
 * Login.vue
 * Registration.vue
 * ForgotPassword.vue

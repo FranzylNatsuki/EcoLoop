@@ -160,13 +160,17 @@ onMounted(async () => {
     myId.value = session.user.id
   }
 
+  // Fetch the main post first so we have the ID for the author count
   await fetchPostDetails()
 
+  // Run the remaining fetches simultaneously
+  const promises: Promise<void>[] = [fetchComments()]
   if (post.value?.author_id) {
-    await fetchAuthorPostCount(post.value.author_id)
+    promises.push(fetchAuthorPostCount(post.value.author_id))
   }
-
-  await fetchComments()
+  
+  await Promise.all(promises)
+  
   isLoading.value = false
 })
 

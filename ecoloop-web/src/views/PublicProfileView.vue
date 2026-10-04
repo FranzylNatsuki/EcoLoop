@@ -24,9 +24,10 @@ const myRating = ref(0)
 const hoverRating = ref(0)
 const isSubmittingRating = ref(false)
 
-const { posts } = usePosts()
+const { posts, fetchPosts } = usePosts()
 
 onMounted(async () => {
+  fetchPosts()
   if (!targetUserId) {
     console.error("No user ID provided in URL.")
     isLoading.value = false
@@ -136,7 +137,7 @@ const computedProjectsSupported = computed(() => {
 
 const userPosts = computed(() => {
   if (!posts.value || !Array.isArray(posts.value) || !profileData.value) return []
-  return posts.value.filter(post => post.author?.full_name === profileData.value.full_name)
+  return posts.value.filter(post => post.author_id === profileData.value.id)
 })
 
 // --- Submit Rating Logic ---

@@ -476,12 +476,20 @@ async function handleRequestSubmit() {
 async function handleAcceptRequest() {
   if (!selectedRequest.value || !post.value) return
   
-  if (!confirm('Are you sure you want to ACCEPT this request? This will mark your listing as SOLD.')) return
+  if (!confirm('Are you sure you want to ACCEPT this request?')) return
 
   isUpdatingRequest.value = true
   try {
     const requestId = selectedRequest.value.id
     const postId = post.value.id
+
+    // Deduct quantity
+    const reqQty = Number(selectedRequest.value.quantity) || 1
+    const currentQty = Number(post.value.quantity) || 0
+    const newQty = Math.max(0, currentQty - reqQty)
+    
+    // Only mark sold if empty
+    const newStatus = newQty === 0 ? 'sold' : 'available'
 
     const { error: reqError } = await supabase
       .from('purchase_requests')
@@ -492,13 +500,14 @@ async function handleAcceptRequest() {
 
     const { error: postError } = await supabase
       .from('marketplace_listings')
-      .update({ status: 'sold' })
+      .update({ status: newStatus, quantity: newQty })
       .eq('id', postId)
 
     if (postError) {
       console.warn('Could not update listing status to sold:', postError)
     } else {
-      post.value.status = 'sold'
+      post.value.status = newStatus
+      post.value.quantity = newQty
     }
 
     await fetchPurchaseRequests()
@@ -515,23 +524,23 @@ async function handleAcceptRequest() {
 async function handleRejectRequest() {
   if (!selectedRequest.value || selectedRequest.value.status !== 'pending') return
   
-  if (!confirm('Are you sure you want to REJECT this request?')) return
+  if (!confirm('Are you sure you want to DECLINE this request?')) return
 
   isUpdatingRequest.value = true
   try {
     const { error: requestError } = await supabase
       .from('purchase_requests')
-      .update({ status: 'rejected' })
+      .update({ status: 'declined' })
       .eq('id', selectedRequest.value.id)
 
     if (requestError) throw requestError
 
     await fetchPurchaseRequests()
-    addToast('Request rejected successfully!', 'success')
+    addToast('Request declined successfully!', 'success')
     selectedRequest.value = null
   } catch (err: any) {
-    console.error('Failed to reject purchase request:', err)
-    addToast('Failed to reject request', 'error')
+    console.error('Failed to decline purchase request:', err)
+    addToast('Failed to decline request', 'error')
   } finally {
     isUpdatingRequest.value = false
   }
@@ -865,8 +874,8 @@ async function handleShare() {
           <span v-else-if="selectedRequest.status === 'accepted'" class="accepted-text">
             ✓ Request Accepted (Listing Sold)
           </span>
-          <span v-else-if="selectedRequest.status === 'rejected'" class="rejected-text">
-            Request Rejected
+          <span v-else-if="selectedRequest.status === 'declined'" class="rejected-text">
+            Request Declined
           </span>
           <span v-else-if="post?.status === 'sold'" class="accepted-text">
             Listing Sold

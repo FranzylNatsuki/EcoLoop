@@ -34,7 +34,7 @@ const requestCategoryFilter = ref('all')
 const requestSortBy = ref('newest_requested')
 
 // Extract posts state and fetch method from composable
-const { posts } = usePosts()
+const { posts, fetchPosts } = usePosts()
 
 async function fetchUserRequests() {
   if (isLoadingUserRequests.value) return
@@ -134,6 +134,7 @@ function goToListingDetail(listingId: string | number | null | undefined) {
 
 // Fetch posts on view mount
 onMounted(async () => {
+  fetchPosts() // Load posts so profile tab can show them
   const { data: { session } } = await supabase.auth.getSession()
 
   if (session) {
@@ -141,38 +142,29 @@ onMounted(async () => {
 
     console.log("Session found! Fetching data for:", userId)
 
-    // Fetch from your profiles, profile_data, and organizations tables
-    const { data, error } = await supabase
-          .from('profiles')
-          .select(`
-            *,
-            profile_data (*),
-            organizations!organization_id (*)
-          `)
-          .eq('id', userId)
-          .single()
+    // Fire all profile queries SIMULTANEOUSLY to prevent network waterfalls
+    const [
+      profileRes,
+      pledgesRes,
+      eventPledgesRes,
+      rPledgesRes,
+      rEventPledgesRes,
+      listingsRes
+    ] = await Promise.all([
+      supabase.from('profiles').select(`*, profile_data (*), organizations!organization_id (*)`).eq('id', userId).single(),
+      supabase.from('pledges').select(`*, post:cause_requests(title), items:pledge_items(material_name, quantity, unit)`).eq('donor_id', userId).order('created_at', { ascending: false }).limit(20),
+      supabase.from('event_pledges').select(`*, post:events(title), items:event_pledge_items(material_name, quantity, unit)`).eq('donor_id', userId).order('created_at', { ascending: false }).limit(20),
+      supabase.from('pledges').select(`*, post:cause_requests!inner(title, author_id), items:pledge_items(material_name, quantity, unit)`).eq('cause_requests.author_id', userId).order('created_at', { ascending: false }).limit(20),
+      supabase.from('event_pledges').select(`*, post:events!inner(title, author_id), items:event_pledge_items(material_name, quantity, unit)`).eq('events.author_id', userId).order('created_at', { ascending: false }).limit(20),
+      supabase.from('marketplace_listings').select('*').eq('author_id', userId).order('created_at', { ascending: false })
+    ])
 
-    const { data: pledgesData, error: pledgesError } = await supabase
-      .from('pledges')
-      .select(`
-        *,
-        post:cause_requests(title),
-        items:pledge_items(material_name, quantity, unit)
-      `)
-      .eq('donor_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    const { data: eventPledgesData, error: eventPledgesError } = await supabase
-      .from('event_pledges')
-      .select(`
-        *,
-        post:events(title),
-        items:event_pledge_items(material_name, quantity, unit)
-      `)
-      .eq('donor_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(20)
+    const { data, error } = profileRes
+    const { data: pledgesData, error: pledgesError } = pledgesRes
+    const { data: eventPledgesData, error: eventPledgesError } = eventPledgesRes
+    const { data: rPledgesData } = rPledgesRes
+    const { data: rEventPledgesData } = rEventPledgesRes
+    const { data: listingsData, error: listingsError } = listingsRes
 
     let combinedPledges: any[] = []
 
@@ -188,32 +180,9 @@ onMounted(async () => {
 
     // Sort by created_at descending
     combinedPledges.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-
     userPledges.value = combinedPledges
 
     // --- FETCH RECEIVED PLEDGES ---
-    const { data: rPledgesData } = await supabase
-      .from('pledges')
-      .select(`
-        *,
-        post:cause_requests!inner(title, author_id),
-        items:pledge_items(material_name, quantity, unit)
-      `)
-      .eq('cause_requests.author_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(20)
-
-    const { data: rEventPledgesData } = await supabase
-      .from('event_pledges')
-      .select(`
-        *,
-        post:events!inner(title, author_id),
-        items:event_pledge_items(material_name, quantity, unit)
-      `)
-      .eq('events.author_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(20)
-
     let combinedReceived: any[] = []
     if (rPledgesData) {
       combinedReceived = [...combinedReceived, ...rPledgesData.map((pl: any) => ({ ...pl, pledgeType: 'cause' }))]
@@ -224,12 +193,6 @@ onMounted(async () => {
     combinedReceived.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     receivedPledges.value = combinedReceived
     // ------------------------------
-
-    const { data: listingsData, error: listingsError } = await supabase
-          .from('marketplace_listings')
-          .select('*')
-          .eq('author_id', userId)
-          .order('created_at', { ascending: false })
 
     if (listingsError) {
       console.error('Failed to fetch user marketplace listings:', listingsError)
@@ -361,10 +324,10 @@ const computedProjectsSupported = computed(() => {
   return uniqueProjects.size
 })
 
-// Filter posts matching the logged-in user's database name
+// Filter posts matching the logged-in user's ID
 const userPosts = computed(() => {
   if (!posts.value || !Array.isArray(posts.value) || !profileData.value) return []
-  return posts.value.filter(post => post.author?.full_name === profileData.value.full_name)
+  return posts.value.filter(post => post.author_id === profileData.value.id)
 })
 
 const listingCategories = computed(() => [
@@ -431,7 +394,7 @@ const requestStats = computed(() => ({
   total: userRequests.value.length,
   pending: userRequests.value.filter((request: any) => String(request.status || '').toLowerCase() === 'pending').length,
   accepted: userRequests.value.filter((request: any) => String(request.status || '').toLowerCase() === 'accepted').length,
-  rejected: userRequests.value.filter((request: any) => String(request.status || '').toLowerCase() === 'rejected').length
+  declined: userRequests.value.filter((request: any) => String(request.status || '').toLowerCase() === 'declined').length
 }))
 
 </script>
@@ -676,7 +639,7 @@ const requestStats = computed(() => ({
               <option value="all">All Statuses</option>
               <option value="pending">Pending</option>
               <option value="accepted">Accepted</option>
-              <option value="rejected">Rejected</option>
+              <option value="declined">Declined</option>
             </select>
             <select v-model="requestCategoryFilter" class="listing-filter-control" aria-label="Filter requests by category">
               <option value="all">All Categories</option>
@@ -695,7 +658,7 @@ const requestStats = computed(() => ({
           </div>
           <p class="filter-summary-line">
             Showing {{ filteredRequests.length }} of {{ requestStats.total }} requests
-            ({{ requestStats.pending }} pending, {{ requestStats.accepted }} accepted, {{ requestStats.rejected }} rejected)
+            ({{ requestStats.pending }} pending, {{ requestStats.accepted }} accepted, {{ requestStats.declined }} declined)
           </p>
           <div v-if="isLoadingUserRequests" class="empty-state">Loading your purchase requests...</div>
           <div v-else-if="userRequests.length === 0" class="empty-state">
@@ -1092,7 +1055,7 @@ const requestStats = computed(() => ({
   color: #2E7D32;
 }
 
-.status-badge.rejected {
+.status-badge.declined {
   background: #FFEBEE;
   color: #C62828;
 }
