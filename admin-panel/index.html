@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EcoLoop Admin Panel</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* basic modal styles */
+    .modal { display: none; }
+    .modal.active { display: flex; }
+    
+    /* Resizable table headers */
+    th.resizable {
+      resize: horizontal;
+      overflow: hidden;
+      min-width: 100px;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen text-gray-800 font-sans">
+  
+  <!-- Login Section -->
+  <div id="login-section" class="flex flex-col items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded-lg shadow-md w-96">
+      <h2 class="text-2xl font-bold mb-6 text-center text-green-600">EcoLoop Admin</h2>
+      <form id="login-form" class="flex flex-col gap-4">
+        <div>
+          <label class="block text-sm font-medium mb-1">Email</label>
+          <input type="email" id="email" class="w-full border p-2 rounded focus:ring focus:ring-green-300" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-1">Password</label>
+          <input type="password" id="password" class="w-full border p-2 rounded focus:ring focus:ring-green-300" required>
+        </div>
+        <button type="submit" class="bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700">Login</button>
+      </form>
+      <p id="login-error" class="text-red-500 text-sm mt-4 hidden"></p>
+    </div>
+  </div>
+
+  <!-- Main App Section -->
+  <div id="app-section" class="hidden flex flex-col h-screen">
+    <nav class="bg-green-600 text-white p-4 shadow-md flex justify-between items-center shrink-0">
+      <h1 class="text-xl font-bold">EcoLoop Admin Dashboard</h1>
+      <button id="logout-btn" class="bg-green-800 hover:bg-green-900 px-4 py-2 rounded text-sm">Logout</button>
+    </nav>
+    
+    <div class="container mx-auto p-4 flex-1 flex flex-col min-h-0">
+      
+      <!-- Horizontal Navigation -->
+      <div class="bg-white shadow rounded p-2 mb-4 shrink-0 flex overflow-x-auto gap-2" id="nav-tabs">
+        <button class="tab-btn flex-1 whitespace-nowrap p-2 rounded bg-green-100 text-green-800 font-medium" data-table="cause_requests">Posts (cause_requests)</button>
+        <button class="tab-btn flex-1 whitespace-nowrap p-2 rounded hover:bg-gray-100" data-table="profiles">Users (profiles)</button>
+        <button class="tab-btn flex-1 whitespace-nowrap p-2 rounded hover:bg-gray-100" data-table="organizations">Orgs (organizations)</button>
+        <button class="tab-btn flex-1 whitespace-nowrap p-2 rounded hover:bg-gray-100" data-table="pledges">Donations (pledges)</button>
+        <button class="tab-btn flex-1 whitespace-nowrap p-2 rounded hover:bg-gray-100" data-table="marketplace_listings">Listings (marketplace_listings)</button>
+        <button class="tab-btn flex-1 whitespace-nowrap p-2 rounded hover:bg-gray-100" data-table="post_comments">Comments (post_comments)</button>
+      </div>
+
+      <!-- Main Content -->
+      <div class="bg-white shadow rounded p-4 flex-1 flex flex-col min-h-0 relative">
+        <div class="flex flex-wrap justify-between items-center mb-4 border-b pb-2 shrink-0 gap-2">
+          <h2 id="current-table-title" class="text-xl font-bold">Posts</h2>
+          <div class="flex gap-2 flex-wrap relative">
+            <button id="undo-btn" class="hidden bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm transition-all">Undo Delete</button>
+            <button id="refresh-btn" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded text-sm text-gray-700">Refresh</button>
+            
+            <div class="relative">
+              <button id="col-filter-btn" class="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded text-sm text-gray-700">Columns ▼</button>
+              <div id="col-filter-menu" class="hidden absolute right-0 mt-1 w-48 bg-white border rounded shadow-lg z-50 max-h-64 overflow-y-auto p-2 text-sm">
+                <!-- Checkboxes injected here -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex-1 overflow-auto border rounded relative">
+          <table class="w-full text-left border-collapse" id="data-table">
+            <thead class="bg-gray-100 border-b sticky top-0 z-10" id="data-thead">
+              <!-- Dynamically populated -->
+            </thead>
+            <tbody id="data-tbody" class="text-sm">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+          <p id="loading-text" class="text-center py-8 text-gray-500 hidden">Loading data...</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div id="modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+    <div class="bg-white rounded-lg p-6 w-full max-w-lg max-h-[90vh] flex flex-col">
+      <h3 class="text-xl font-bold mb-4">Edit Row</h3>
+      <div id="modal-form" class="flex-1 overflow-y-auto pr-2 flex flex-col gap-3">
+        <!-- Dynamically populated inputs -->
+      </div>
+      <div class="mt-6 flex justify-end gap-2 pt-4 border-t">
+        <button id="modal-cancel" class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Cancel</button>
+        <button id="modal-save" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm'
+
+    const SUPABASE_URL = 'https://dweikiycbipbxdiklxyg.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_C1wieIivObpsOhJcBQG-Dw_QUDDmKUb';
+    const SITE_DOMAIN = 'https://ecoloop-asia.pages.dev';
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let currentTable = 'cause_requests';
+    let currentData = [];
+    let undoStack = []; 
+    let editingRowId = null;
+    let editingRowData = null;
+    let visibleColumns = new Set(); // To track which columns are visible
+
+    // DOM Elements
+    const loginSection = document.getElementById('login-section');
+    const appSection = document.getElementById('app-section');
+    const loginForm = document.getElementById('login-form');
+    const loginError = document.getElementById('login-error');
+    const logoutBtn = document.getElementById('logout-btn');
+    
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const currentTableTitle = document.getElementById('current-table-title');
+    const thead = document.getElementById('data-thead');
+    const tbody = document.getElementById('data-tbody');
+    const loadingText = document.getElementById('loading-text');
+    const dataTable = document.getElementById('data-table');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const undoBtn = document.getElementById('undo-btn');
+
+    const colFilterBtn = document.getElementById('col-filter-btn');
+    const colFilterMenu = document.getElementById('col-filter-menu');
+
+    const modal = document.getElementById('modal');
+    const modalForm = document.getElementById('modal-form');
+    const modalCancel = document.getElementById('modal-cancel');
+    const modalSave = document.getElementById('modal-save');
+
+    // Authentication Check
+    async function checkAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        showApp();
+      } else {
+        showLogin();
+      }
+    }
+
+    function showLogin() {
+      loginSection.classList.remove('hidden');
+      appSection.classList.add('hidden');
+    }
+
+    function showApp() {
+      loginSection.classList.add('hidden');
+      appSection.classList.remove('hidden');
+      loadTableData();
+    }
+
+    // Auth Listeners
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loginError.classList.add('hidden');
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        loginError.textContent = error.message;
+        loginError.classList.remove('hidden');
+      } else {
+        showApp();
+      }
+    });
+
+    logoutBtn.addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      showLogin();
+    });
+
+    // Navigation
+    tabBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        tabBtns.forEach(b => {
+          b.classList.remove('bg-green-100', 'text-green-800', 'font-medium');
+          b.classList.add('hover:bg-gray-100');
+        });
+        e.target.classList.add('bg-green-100', 'text-green-800', 'font-medium');
+        e.target.classList.remove('hover:bg-gray-100');
+
+        currentTable = e.target.dataset.table;
+        currentTableTitle.textContent = e.target.textContent;
+        // reset visible columns on tab switch so all show by default
+        visibleColumns.clear();
+        loadTableData();
+      });
+    });
+
+    refreshBtn.addEventListener('click', loadTableData);
+
+    // Toggle column menu
+    colFilterBtn.addEventListener('click', () => {
+      colFilterMenu.classList.toggle('hidden');
+    });
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!colFilterBtn.contains(e.target) && !colFilterMenu.contains(e.target)) {
+        colFilterMenu.classList.add('hidden');
+      }
+    });
+
+    // Helper to get site URL
+    function getSiteUrlForRow(row) {
+      const id = row.id || row.uuid || row.user_id || row[Object.keys(row)[0]];
+      if (!id) return null;
+      
+      switch(currentTable) {
+        case 'cause_requests': return `${SITE_DOMAIN}/post/${id}`;
+        case 'profiles': return `${SITE_DOMAIN}/user/${id}`;
+        case 'pledges': return `${SITE_DOMAIN}/pledge/${id}`;
+        case 'marketplace_listings': return `${SITE_DOMAIN}/marketplace/${id}`;
+        case 'post_comments': 
+          // If it has a post_id, link to the post
+          if (row.post_id) return `${SITE_DOMAIN}/post/${row.post_id}`;
+          return null;
+        default: return null;
+      }
+    }
+
+    // Data Loading
+    async function loadTableData() {
+      loadingText.classList.remove('hidden');
+      dataTable.classList.add('hidden');
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+
+      const { data, error } = await supabase.from(currentTable).select('*').order('created_at', { ascending: false }).limit(50);
+      
+      if (error) {
+        const { data: fallbackData, error: fallbackError } = await supabase.from(currentTable).select('*').limit(50);
+        if (fallbackError) {
+          alert('Error fetching data: ' + fallbackError.message);
+          loadingText.textContent = 'Error loading data.';
+          return;
+        }
+        currentData = fallbackData || [];
+      } else {
+        currentData = data || [];
+      }
+
+      // Initialize visible columns if first load of tab
+      if (currentData.length > 0 && visibleColumns.size === 0) {
+        Object.keys(currentData[0]).forEach(k => visibleColumns.add(k));
+      }
+
+      renderColFilterMenu();
+      renderTable();
+      
+      loadingText.classList.add('hidden');
+      dataTable.classList.remove('hidden');
+    }
+
+    function renderColFilterMenu() {
+      if (currentData.length === 0) {
+        colFilterMenu.innerHTML = '<div class="p-2 text-gray-500">No columns</div>';
+        return;
+      }
+      
+      const keys = Object.keys(currentData[0]);
+      let html = '';
+      keys.forEach(key => {
+        const isChecked = visibleColumns.has(key) ? 'checked' : '';
+        html += `
+          <label class="flex items-center gap-2 mb-1 cursor-pointer">
+            <input type="checkbox" class="col-toggle" data-key="${key}" ${isChecked}>
+            ${key}
+          </label>
+        `;
+      });
+      colFilterMenu.innerHTML = html;
+
+      // Add listeners to checkboxes
+      document.querySelectorAll('.col-toggle').forEach(chk => {
+        chk.addEventListener('change', (e) => {
+          const key = e.target.dataset.key;
+          if (e.target.checked) visibleColumns.add(key);
+          else visibleColumns.delete(key);
+          renderTable();
+        });
+      });
+    }
+
+    function renderTable() {
+      if (currentData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="100%" class="text-center p-4 text-gray-500">No data found in this table.</td></tr>';
+        return;
+      }
+
+      const keys = Object.keys(currentData[0]).filter(k => visibleColumns.has(k));
+      
+      let headerHTML = '<tr>';
+      keys.forEach(key => {
+        headerHTML += `<th class="p-2 border-b border-r resizable whitespace-nowrap">${key}</th>`;
+      });
+      headerHTML += `<th class="p-2 border-b bg-gray-100 shadow-sm whitespace-nowrap w-32">Actions</th></tr>`;
+      thead.innerHTML = headerHTML;
+
+      let bodyHTML = '';
+      currentData.forEach((row, index) => {
+        let tr = `<tr class="hover:bg-gray-50 border-b group">`;
+        
+        const siteUrl = getSiteUrlForRow(row);
+        
+        keys.forEach((key, colIndex) => {
+          let val = row[key];
+          if (val && typeof val === 'object') val = JSON.stringify(val);
+          if (typeof val === 'string' && val.length > 50) val = val.substring(0, 50) + '...';
+          
+          let content = val !== null ? val : '<span class="text-gray-400">null</span>';
+          
+          // Make the first visible column clickable
+          if (colIndex === 0 && siteUrl) {
+            content = `<a href="${siteUrl}" target="_blank" class="text-blue-600 hover:underline font-medium" title="View on site">${content} <span class="text-xs">↗</span></a>`;
+          }
+
+          tr += `<td class="p-2 border-r truncate max-w-xs" title="${row[key] !== null ? String(row[key]).replace(/"/g, '&quot;') : ''}">${content}</td>`;
+        });
+        
+        tr += `<td class="p-2 bg-white group-hover:bg-gray-50 whitespace-nowrap">
+          <button class="edit-btn text-blue-500 hover:text-blue-700 mr-2" data-index="${index}">Edit</button>
+          <button class="delete-btn text-red-500 hover:text-red-700" data-index="${index}">Delete</button>
+        </td></tr>`;
+        bodyHTML += tr;
+      });
+      
+      tbody.innerHTML = bodyHTML;
+
+      document.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => openEditModal(e.target.dataset.index));
+      });
+      document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => deleteRow(e.target.dataset.index));
+      });
+    }
+
+    // Delete & Undo
+    async function deleteRow(index) {
+      const row = currentData[index];
+      const pkKey = row.id !== undefined ? 'id' : Object.keys(row)[0];
+      const pkVal = row[pkKey];
+
+      if (!confirm(`Are you sure you want to delete this row where ${pkKey}=${pkVal}?`)) return;
+
+      // Handle manual cascading deletes for foreign key constraints
+      if (currentTable === 'marketplace_listings') {
+        await supabase.from('marketplace_listing_images').delete().eq('listing_id', pkVal);
+        await supabase.from('purchase_requests').delete().eq('post_id', pkVal);
+      } else if (currentTable === 'cause_requests') {
+        await supabase.from('post_likes').delete().eq('post_id', pkVal);
+        await supabase.from('pledges').delete().eq('post_id', pkVal);
+        await supabase.from('post_comments').delete().eq('post_id', pkVal);
+        await supabase.from('post_images').delete().eq('post_id', pkVal);
+      }
+
+      const { error } = await supabase.from(currentTable).delete().eq(pkKey, pkVal);
+      if (error) {
+        alert('Failed to delete: ' + error.message + '\n\nNote: This might be due to remaining related rows in other tables blocking the deletion.');
+      } else {
+        undoStack.push({ table: currentTable, rowData: row });
+        updateUndoButton();
+        loadTableData();
+      }
+    }
+
+    undoBtn.addEventListener('click', async () => {
+      if (undoStack.length === 0) return;
+      const lastDeleted = undoStack.pop();
+      updateUndoButton();
+
+      const { error } = await supabase.from(lastDeleted.table).insert([lastDeleted.rowData]);
+      if (error) {
+        alert('Failed to undo: ' + error.message);
+      } else {
+        if (currentTable === lastDeleted.table) {
+          loadTableData();
+        } else {
+          alert('Undo successful in table: ' + lastDeleted.table);
+        }
+      }
+    });
+
+    function updateUndoButton() {
+      if (undoStack.length > 0) {
+        undoBtn.classList.remove('hidden');
+        undoBtn.textContent = `Undo Delete (${undoStack.length})`;
+      } else {
+        undoBtn.classList.add('hidden');
+      }
+    }
+
+    // Edit Modal
+    function openEditModal(index) {
+      const row = currentData[index];
+      editingRowData = row;
+      editingRowId = row.id !== undefined ? row.id : row[Object.keys(row)[0]];
+
+      modalForm.innerHTML = '';
+      Object.keys(row).forEach(key => {
+        const val = row[key];
+        const isObj = val && typeof val === 'object';
+        const strVal = isObj ? JSON.stringify(val) : (val === null ? '' : val);
+
+        const fieldDiv = document.createElement('div');
+        fieldDiv.innerHTML = `
+          <label class="block text-sm font-medium mb-1 text-gray-700">${key}</label>
+          <textarea id="edit-field-${key}" rows="1" class="w-full border p-2 rounded focus:ring focus:ring-blue-300 text-sm">${strVal}</textarea>
+        `;
+        modalForm.appendChild(fieldDiv);
+      });
+
+      modal.classList.add('active');
+    }
+
+    modalCancel.addEventListener('click', () => {
+      modal.classList.remove('active');
+    });
+
+    modalSave.addEventListener('click', async () => {
+      const pkKey = editingRowData.id !== undefined ? 'id' : Object.keys(editingRowData)[0];
+      const updates = {};
+      
+      Object.keys(editingRowData).forEach(key => {
+        const input = document.getElementById(`edit-field-${key}`);
+        let newVal = input.value;
+        if (newVal === '') newVal = null; 
+        
+        if (newVal !== null && typeof editingRowData[key] === 'number') newVal = Number(newVal);
+        else if (newVal !== null && typeof editingRowData[key] === 'boolean') newVal = newVal === 'true';
+
+        if (newVal !== editingRowData[key]) updates[key] = newVal;
+      });
+
+      if (Object.keys(updates).length === 0) {
+        modal.classList.remove('active');
+        return;
+      }
+
+      const { error } = await supabase.from(currentTable).update(updates).eq(pkKey, editingRowId);
+      
+      if (error) {
+        alert('Update failed: ' + error.message);
+      } else {
+        modal.classList.remove('active');
+        loadTableData();
+      }
+    });
+
+    // Init
+    checkAuth();
+
+  </script>
+</body>
+</html>
