@@ -13,7 +13,10 @@ Codebase for EcoLoop website for CCS-6. Full techstack specifications:
 * Vercel / Cloudflare pages Vue Server
 
 Deployed Site:
-`ecoloop.runasp.net`
+
+https://ecoloop-asia.pages.dev/
+https://ecoloop-admin-panel.vercel.app/
+https://ecoloop-asia.netlify.app/
 
 Leftover To Do:
 * Google Auth
