@@ -11,6 +11,7 @@ import { usePosts } from '../composables/usePosts'
 import BackButton from '../components/common/BackButton.vue'
 import DonationCard from '../components/posts/DonationCard.vue'
 import { BadgeCheck } from 'lucide-vue-next'
+import VerificationModal from '../components/Modals/VerificationModal.vue'
 
 const router = useRouter()
 
@@ -18,6 +19,23 @@ const activeTab = ref('posts')
 const profileData = ref<any>(null)
 const isLoading = ref(true)
 const isEditModalOpen = ref(false)
+const isVerificationModalOpen = ref(false)
+const orgStatus = computed(() => profileData.value?.organizations?.verification_status as string | undefined)
+const canRequestVerification = computed(() =>
+  !!profileData.value?.is_org && orgStatus.value !== 'verified' && !hasPendingDocs.value
+)
+const hasPendingDocs = computed(() =>
+  orgStatus.value === 'pending' && (profileData.value?.organizations?.verification_documents?.length || 0) > 0
+)
+
+function handleVerificationSubmitted() {
+  const docs = profileData.value.organizations?.verification_documents || []
+  profileData.value.organizations = {
+    ...(profileData.value.organizations || {}),
+    verification_status: 'pending',
+    verification_documents: [...docs, 'submitted']
+  }
+}
 const userPledges = ref<any[]>([])
 const receivedPledges = ref<any[]>([])
 const userListings = ref<any[]>([])
@@ -434,9 +452,17 @@ const requestStats = computed(() => ({
               </h1>
               <span class="user-subtext">{{ profileData.email }} • Joined {{ new Date(profileData.created_at).getFullYear() }}</span>
             </div>
-            <button class="btn-edit-profile" @click="isEditModalOpen = true">
-              Edit Profile
-            </button>
+            <div class="profile-actions">
+              <button v-if="canRequestVerification" class="btn-get-verified" @click="isVerificationModalOpen = true">
+                <BadgeCheck :size="16" /> Get Verification
+              </button>
+              <span v-else-if="profileData.is_org && hasPendingDocs" class="verification-pending">
+                Verification pending
+              </span>
+              <button class="btn-edit-profile" @click="isEditModalOpen = true">
+                Edit Profile
+              </button>
+            </div>
           </div>
           <p class="user-bio">
             {{ profileData.profile_data?.about || 'No bio provided yet.' }}
@@ -707,9 +733,46 @@ const requestStats = computed(() => ({
     :initialData="profileData"
     @save="handleSaveProfile"
   />
+  <VerificationModal
+    v-if="profileData"
+    v-model="isVerificationModalOpen"
+    :user-id="profileData.id"
+    @submitted="handleVerificationSubmitted"
+  />
 </template>
 
 <style scoped>
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-get-verified {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-get-verified:hover {
+  background: #2563EB;
+}
+
+.verification-pending {
+  font-size: 13px;
+  color: #B7791F;
+  background: #FEF3C7;
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
 .profile-page {
   width: 100%;
   min-height: 100vh;

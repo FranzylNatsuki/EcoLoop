@@ -323,10 +323,22 @@
         
         keys.forEach((key, colIndex) => {
           let val = row[key];
+          const raw = row[key];
+          const urls = (Array.isArray(raw) ? raw : [raw])
+            .filter(v => typeof v === 'string' && /^https?:\/\//i.test(v));
+
           if (val && typeof val === 'object') val = JSON.stringify(val);
           if (typeof val === 'string' && val.length > 50) val = val.substring(0, 50) + '...';
           
           let content = val !== null ? val : '<span class="text-gray-400">null</span>';
+
+          if (urls.length > 0 && colIndex !== 0) {
+            content = urls.map((u, i) => {
+              const safe = u.replace(/"/g, '&quot;');
+              const label = urls.length > 1 ? `File ${i + 1}` : 'Open file';
+              return `<a href="${safe}" target="_blank" rel="noopener" class="text-blue-600 hover:underline mr-2">${label} ↗</a>`;
+            }).join('');
+          }
           
           // Make the first visible column clickable
           if (colIndex === 0 && siteUrl) {
@@ -439,16 +451,37 @@
       const pkKey = editingRowData.id !== undefined ? 'id' : Object.keys(editingRowData)[0];
       const updates = {};
       
+      let parseError = null;
+
       Object.keys(editingRowData).forEach(key => {
         const input = document.getElementById(`edit-field-${key}`);
+        const original = editingRowData[key];
+        const isObj = original && typeof original === 'object';
         let newVal = input.value;
+
+        if (isObj) {
+          if (newVal.trim() === JSON.stringify(original)) return;
+          if (newVal.trim() === '') { updates[key] = null; return; }
+          try {
+            updates[key] = JSON.parse(newVal);
+          } catch {
+            parseError = `"${key}" must be valid JSON, e.g. ["https://..."]`;
+          }
+          return;
+        }
+
         if (newVal === '') newVal = null; 
         
-        if (newVal !== null && typeof editingRowData[key] === 'number') newVal = Number(newVal);
-        else if (newVal !== null && typeof editingRowData[key] === 'boolean') newVal = newVal === 'true';
+        if (newVal !== null && typeof original === 'number') newVal = Number(newVal);
+        else if (newVal !== null && typeof original === 'boolean') newVal = newVal === 'true';
 
-        if (newVal !== editingRowData[key]) updates[key] = newVal;
+        if (newVal !== original) updates[key] = newVal;
       });
+
+      if (parseError) {
+        alert('Update failed: ' + parseError);
+        return;
+      }
 
       if (Object.keys(updates).length === 0) {
         modal.classList.remove('active');

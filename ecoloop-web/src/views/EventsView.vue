@@ -5,6 +5,7 @@ import { useEvents } from '../composables/useEvents'
 import { useSort, getHotnessScore } from '../composables/useSort'
 import { useToast } from '../composables/useToast'
 import type { EventItem } from '../types/event'
+import { BadgeCheck } from 'lucide-vue-next'
 
 import CategoryBar from '../components/layout/CategoryBar.vue'
 import PageLayout from '../components/layout/PageLayout.vue'
