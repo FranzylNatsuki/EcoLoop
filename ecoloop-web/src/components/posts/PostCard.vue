@@ -108,14 +108,16 @@ function openPost() {
 
       <!-- Passed is-completed prop down to PostActions -->
       <PostActions
-              :votes="post.vote_count"
-              :comments="post.comment_count"
-              :post-id="post.id"
-              :is-owner="isOwner"
-              :is-completed="post.is_completed"
-              :project-name="post.title"
-              :author-username="post.author.full_name"
-            />
+        :key="post.id"
+        :votes="post.vote_count"
+        :comments="post.comment_count"
+        :post-id="post.id"
+        :is-owner="isOwner"
+        :is-completed="post.is_completed"
+        :project-name="post.title"
+        :author-username="post.author.full_name"
+        @update:votes="(v: number) => { if (post) post.vote_count = v }"
+      />
     </div>
   </article>
 </template>

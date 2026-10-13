@@ -102,8 +102,11 @@ function openPost() {
       />
       <PostActions
         v-else
-        :comments="post.comments || 0" :votes="post.vote_count"
+        :key="post.id"
+        :comments="post.comments || 0"
+        :votes="post.vote_count"
         :post-id="post.id"
+        @update:votes="(v: number) => { if (post) post.vote_count = v }"
       />
 
       <BuyRequestModal

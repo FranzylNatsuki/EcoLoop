@@ -110,18 +110,41 @@ export function useEvents() {
     const donatedItems = Number(row.donated_items || 0)
 
     // 1. Calculate total goal from materials_needed array
-    const rawMaterials = Array.isArray(row.materials_needed) ? row.materials_needed : []
+    let rawMaterials: any[] = []
+    if (Array.isArray(row.materials_needed)) {
+      rawMaterials = row.materials_needed
+    } else if (typeof row.materials_needed === 'string') {
+      try {
+        const parsed = JSON.parse(row.materials_needed)
+        if (Array.isArray(parsed)) rawMaterials = parsed
+      } catch {}
+    }
+
     const computedTarget = rawMaterials.reduce(
-      (sum: number, mat: any) => sum + (Number(mat.target) || 0),
+      (sum: number, mat: any) => sum + (Number(mat.target ?? mat.target_quantity ?? mat.quantity) || 0),
       0
     )
 
+    const sumCurrentInMaterials = rawMaterials.reduce(
+      (sum: number, mat: any) => sum + (Number(mat.current ?? mat.current_quantity) || 0),
+      0
+    )
+
+    const effectiveDonated = donatedItems > 0 ? donatedItems : sumCurrentInMaterials
     const targetItems = Number(row.target_items) || computedTarget
 
     // 2. Compute percentage accurately
-    const fulfillmentPercent = targetItems > 0
-      ? Math.min(100, Math.round((donatedItems / targetItems) * 100))
-      : (row.fulfillment_percent || 0)
+    let fulfillmentPercent = 0
+    if (targetItems > 0) {
+      const rawPct = (effectiveDonated / targetItems) * 100
+      if (effectiveDonated > 0 && rawPct < 1) {
+        fulfillmentPercent = 1
+      } else {
+        fulfillmentPercent = Math.min(100, Math.round(rawPct))
+      }
+    } else if (row.fulfillment_percent != null) {
+      fulfillmentPercent = Number(row.fulfillment_percent) || 0
+    }
 
     const eventDate = new Date(row.event_date || row.schedule || Date.now())
     const diffTime = eventDate.getTime() - Date.now()
@@ -221,7 +244,8 @@ export function useEvents() {
         .select(`
           quantity,
           pledge:event_pledges!event_pledge_id!inner (
-            event_id
+            event_id,
+            status
           )
         `)
 
@@ -229,13 +253,14 @@ export function useEvents() {
         console.warn('Could not fetch pledge items totals:', pledgeError.message)
       }
 
-      // Sum donated quantities per event ID
+      // Sum donated quantities per event ID ONLY for confirmed or completed donations
       const totalsMap = new Map<string, number>()
       if (pledgeItemsData) {
         pledgeItemsData.forEach((item: any) => {
           const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
           const eventId = pledge?.event_id
-          if (eventId) {
+          const status = pledge?.status
+          if (eventId && (status === 'confirmed' || status === 'completed')) {
             const current = totalsMap.get(eventId) || 0
             totalsMap.set(eventId, current + (Number(item.quantity) || 0))
           }
@@ -284,6 +309,7 @@ export function useEvents() {
             id,
             event_id,
             donor_id,
+            status,
             donor:profiles!donor_id (
               full_name,
               profile_data:profile_data_fk (Avatar)
@@ -296,21 +322,23 @@ export function useEvents() {
       if (pledgeError) console.error("Pledge fetch error:", pledgeError)
 
       const allItems = pledgeItemsData || []
-      
-      console.log('--- EVENT PLEDGES DEBUG ---')
-      console.log('Event ID:', id)
-      console.log('Fetched pledge items:', allItems)
 
-      // 1. Calculate total donated items directly from pledge items
-      const calculatedTotalDonated = allItems.reduce((sum: number, item: any) => {
+      // Filter only confirmed or completed items
+      const confirmedItems = allItems.filter((item: any) => {
+        const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
+        return pledge?.status === 'confirmed' || pledge?.status === 'completed'
+      })
+
+      // 1. Calculate total donated items ONLY from confirmed/completed pledge items
+      const calculatedTotalDonated = confirmedItems.reduce((sum: number, item: any) => {
         return sum + (Number(item.quantity) || 0)
       }, 0)
 
-      // 2. Map material_needed and calculate 'current' for each item dynamically
+      // 2. Map material_needed and calculate 'current' for each item dynamically ONLY from confirmed donations
       const rawMaterials: MaterialNeed[] = data.materials_needed || []
       const updatedMaterials = rawMaterials.map((mat) => {
         const matName = (mat.material || (mat as any).name || '').toLowerCase().trim()
-        const currentQty = allItems
+        const currentQty = confirmedItems
           .filter((item: any) =>
             (item.material_name || '').toLowerCase().trim() === matName
           )
@@ -322,8 +350,8 @@ export function useEvents() {
         }
       })
 
-      // --- A. Recent Pledges ---
-      const recentPledges: Pledge[] = allItems.slice(0, 5).map((item: any) => {
+      // --- A. Recent Donations (only confirmed/completed) ---
+      const recentPledges: Pledge[] = confirmedItems.slice(0, 5).map((item: any) => {
         const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
         const donor = Array.isArray(pledge?.donor) ? pledge?.donor[0] : pledge?.donor
         const profile = Array.isArray(donor?.profile_data) ? donor?.profile_data[0] : donor?.profile_data
@@ -339,7 +367,7 @@ export function useEvents() {
       })
 
       const uniqueDonorKeys = new Set(
-        allItems
+        confirmedItems
           .map((item: any) => {
             const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
             const donor = Array.isArray(pledge?.donor) ? pledge?.donor[0] : pledge?.donor
@@ -356,7 +384,7 @@ export function useEvents() {
         totalQuantity: number
       }>()
 
-      for (const item of allItems) {
+      for (const item of confirmedItems) {
         const itemAny = item as any
         const pledge = Array.isArray(itemAny.pledge) ? itemAny.pledge[0] : itemAny.pledge
         const donor = Array.isArray(pledge?.donor) ? pledge?.donor[0] : pledge?.donor
@@ -389,7 +417,7 @@ export function useEvents() {
           id: td.id,
           donor: td.donor,
           donor_avatar: td.donor_avatar,
-          quantity: `${td.totalQuantity} items pledged`,
+          quantity: `${td.totalQuantity} items donated`,
           time: 'Top Contributor'
         }))
 
@@ -412,7 +440,8 @@ export function useEvents() {
           .select(`
             quantity,
             pledge:event_pledges!event_pledge_id!inner (
-              event_id
+              event_id,
+              status
             )
           `)
 
@@ -420,7 +449,8 @@ export function useEvents() {
           relPledgeItems.forEach((item: any) => {
             const pledge = Array.isArray(item.pledge) ? item.pledge[0] : item.pledge
             const eId = pledge?.event_id
-            if (eId && relatedIds.includes(eId)) {
+            const status = pledge?.status
+            if (eId && relatedIds.includes(eId) && (status === 'confirmed' || status === 'completed')) {
               const current = relTotalsMap.get(eId) || 0
               relTotalsMap.set(eId, current + (Number(item.quantity) || 0))
             }

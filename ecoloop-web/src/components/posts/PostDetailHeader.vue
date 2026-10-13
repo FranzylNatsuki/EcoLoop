@@ -80,6 +80,7 @@ const formattedDate = computed(() => {
       </div>
 
       <PostActions
+        :key="post.id"
         :votes="post.vote_count"
         :comments="post.comment_count"
         :post-id="post.id"
@@ -87,6 +88,7 @@ const formattedDate = computed(() => {
         :is-completed="post.is_completed"
         :project-name="post.title"
         :author-username="post.author.full_name"
+        @update:votes="(v: number) => { if (post) post.vote_count = v }"
       />
     </div>
   </article>

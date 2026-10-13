@@ -53,6 +53,43 @@ export function useNotifications() {
       .order('created_at', { ascending: false })
       .limit(10)
 
+    // Fetch followed events as permanent reminder notifications with time left
+    let followedEventNotifs: any[] = []
+    try {
+      const { data: followRows } = await supabase
+        .from('event_followers')
+        .select('id, created_at, event_id')
+        .eq('user_id', session.user.id)
+
+      if (followRows && followRows.length > 0) {
+        const eventIds = [...new Set(followRows.map(r => r.event_id).filter(Boolean))]
+        if (eventIds.length > 0) {
+          const { data: eventsList } = await supabase
+            .from('events')
+            .select('id, title, event_date, end_time, location, banner_url')
+            .in('id', eventIds)
+
+          if (eventsList && eventsList.length > 0) {
+            followedEventNotifs = eventsList.map(ev => ({
+              id: `reminder-${ev.id}`,
+              eventId: ev.id,
+              title: ev.title,
+              event_date: ev.event_date,
+              end_time: ev.end_time,
+              location: ev.location,
+              banner_url: ev.banner_url,
+              created_at: ev.event_date || new Date().toISOString(),
+              pledgeType: 'event_reminder',
+              isPermanent: true,
+              link: `/events/${ev.id}`
+            }))
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch followed events for reminders:', err)
+    }
+
     let combined: any[] = []
 
     if (pledgesData) combined = [...combined, ...pledgesData.map(n => ({ ...n, pledgeType: 'cause' }))]
@@ -79,15 +116,17 @@ export function useNotifications() {
     }
 
     combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-    notifications.value = combined.slice(0, 10)
 
-    // Evaluate unread logic
+    // Pinned permanent event reminders stay at the top, followed by recent notifications
+    notifications.value = [...followedEventNotifs, ...combined].slice(0, 15)
+
+    // Evaluate unread logic (permanent reminders are persistent and do not force an unread dot)
     const lastCheckStr = localStorage.getItem('last_notif_check')
     const lastCheck = lastCheckStr ? new Date(lastCheckStr).getTime() : 0
     
-    // We can also check actual `is_read` on db_notifs but mixing approaches is fine here
-    hasUnread.value = notifications.value.some(n => {
-      if (n.pledgeType === 'db_notif' && n.is_read === false) return true;
+    hasUnread.value = combined.some(n => {
+      if (n.isPermanent) return false
+      if (n.pledgeType === 'db_notif' && n.is_read === false) return true
       return new Date(n.created_at).getTime() > lastCheck
     })
 

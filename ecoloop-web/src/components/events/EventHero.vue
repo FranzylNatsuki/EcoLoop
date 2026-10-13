@@ -28,7 +28,9 @@ async function handleToggleFollow() {
   const newState = await toggleFollow(String(props.event.id), currentUserId.value, isFollowing.value)
   isFollowing.value = newState
   if (newState) {
-    addToast('You will be notified about updates for this event!', 'success')
+    addToast('Event reminder active! Pinned in your notifications with time left.', 'success')
+  } else {
+    addToast('Event reminder removed from notifications.', 'info')
   }
 }
 
@@ -99,7 +101,7 @@ const heroStyle = computed(() => {
           :class="{ active: isFollowing }"
           :disabled="isUpdating"
           @click.stop="handleToggleFollow"
-          :title="isFollowing ? 'Following event' : 'Follow to be notified'"
+          :title="isFollowing ? 'Event reminder active (Pinned in your notifications)' : 'Follow to pin event countdown in your notifications'"
         >
           <CheckCircle2 v-if="isFollowing" :size="20" stroke-width="2.5" />
           <BellRing v-else :size="20" stroke-width="2.5" />

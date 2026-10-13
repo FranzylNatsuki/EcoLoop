@@ -51,6 +51,8 @@ export interface EventItem {
   urgency_tag?: string
   materials_needed?: MaterialNeed[]
   fulfillment_percent?: number
+  target_items?: number
+  donated_items?: number
   stats?: { days_left: number; total_donors: number; total_pledged: number }
   recent_pledges?: Pledge[]
   top_donors?: Pledge[]

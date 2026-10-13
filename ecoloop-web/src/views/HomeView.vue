@@ -182,10 +182,13 @@ async function refreshMarketplaceRequests() {
 }
 
 function calculateProgress(eventItem: any): number {
+  if (eventItem.fulfillment_percent !== undefined && eventItem.fulfillment_percent !== null) {
+    return Number(eventItem.fulfillment_percent)
+  }
   const goal = Number(eventItem.target_items || 0)
   const donated = Number(eventItem.donated_items || 0)
 
-  if (goal <= 0) return eventItem.fulfillment_percent ?? 0
+  if (goal <= 0) return 0
 
   return Math.min(100, Math.round((donated / goal) * 100))
 }

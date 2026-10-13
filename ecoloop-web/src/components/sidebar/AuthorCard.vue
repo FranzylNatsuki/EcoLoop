@@ -8,6 +8,8 @@ export interface AuthorProfile {
   bio?: string
   postCount?: number
   communityScore?: number
+  rating?: number
+  ratingCount?: number
   joinedYear?: string
 }
 
@@ -31,15 +33,15 @@ defineProps<{ author: AuthorProfile }>()
         <p v-else class="author-bio empty-bio">No bio available.</p>
     </RouterLink>
 
-    <!-- Stats Grid: Posts & Community Score -->
+    <!-- Stats Grid: Posts & Rating -->
     <div class="author-stats">
         <div class="stat-box">
             <strong>{{ author.postCount || 0 }}</strong>
             <span>Posts</span>
         </div>
         <div class="stat-box score-box">
-            <strong>{{ author.communityScore?.toFixed(1) || '0.0' }}</strong>
-            <span>Comm. Score</span>
+            <strong>⭐ {{ (author.rating != null && author.rating > 0) ? author.rating.toFixed(1) : (author.communityScore ? author.communityScore.toFixed(1) : '5.0') }}</strong>
+            <span>Rating</span>
         </div>
     </div>
     <!-- Join Year -->

@@ -47,7 +47,9 @@ let mapInstance: L.Map | null = null
 const isMapExpanded = ref(false)
 
 const isPostAuthor = computed(() => {
-  return currentUserId.value && pledge.value?.post?.author_id === currentUserId.value
+  if (!currentUserId.value || !pledge.value?.post) return false
+  const postObj = Array.isArray(pledge.value.post) ? pledge.value.post[0] : pledge.value.post
+  return postObj?.author_id === currentUserId.value
 })
 
 const fetchPledgeDetails = async (id: string) => {
@@ -59,32 +61,53 @@ const fetchPledgeDetails = async (id: string) => {
     const { data: { session } } = await supabase.auth.getSession()
     currentUserId.value = session?.user.id || null
 
-    const isEvent = route.query.type === 'event'
-    const table = isEvent ? 'event_pledges' : 'pledges'
-    
-    let query = supabase.from(table).select('*').eq('id', id).single()
+    const isEventParam = route.query.type === 'event'
+    let fetchedData: any = null
 
-    if (isEvent) {
-      query = supabase.from(table).select(`
+    if (isEventParam) {
+      const { data, error } = await supabase.from('event_pledges').select(`
         *,
         donor:profiles!donor_id(full_name, email, contact_number),
         post:events!event_id(title, author_id),
         items:event_pledge_items(*)
       `).eq('id', id).single()
+
+      if (error) throw error
+      fetchedData = data
     } else {
-      query = supabase.from(table).select(`
+      const { data, error } = await supabase.from('pledges').select(`
         *,
         donor:profiles!pledges_donor_id_fkey(full_name, email, contact_number),
         post:cause_requests!pledges_post_id_fkey(title, author_id),
         items:pledge_items(*),
         images:pledge_images(image_url)
-      `).eq('id', id).single()
+      `).eq('id', id).maybeSingle()
+
+      if (data) {
+        fetchedData = data
+      } else {
+        // Fallback: check event_pledges
+        const { data: eventData, error: eventErr } = await supabase.from('event_pledges').select(`
+          *,
+          donor:profiles!donor_id(full_name, email, contact_number),
+          post:events!event_id(title, author_id),
+          items:event_pledge_items(*)
+        `).eq('id', id).maybeSingle()
+
+        if (eventErr) throw eventErr
+        if (eventData) {
+          fetchedData = eventData
+        } else {
+          throw error || new Error('Pledge not found.')
+        }
+      }
     }
 
-    const { data, error } = await query
-
-    if (error) throw error
-    pledge.value = data
+    if (fetchedData) {
+      if (Array.isArray(fetchedData.post)) fetchedData.post = fetchedData.post[0]
+      if (Array.isArray(fetchedData.donor)) fetchedData.donor = fetchedData.donor[0]
+    }
+    pledge.value = fetchedData
 
     // --- Fetch existing rating if applicable ---
     const rateeId = isPostAuthor.value
@@ -212,7 +235,7 @@ const executeStatusUpdate = async () => {
   confirmDialog.value.isOpen = false
 
   try {
-    const isEvent = route.query.type === 'event'
+    const isEvent = route.query.type === 'event' || Boolean(pledge.value.event_id)
     const table = isEvent ? 'event_pledges' : 'pledges'
 
     const { error } = await supabase
@@ -225,7 +248,7 @@ const executeStatusUpdate = async () => {
     pledge.value.status = newStatus
   } catch (err: any) {
     console.error('Failed to update status:', err.message)
-    alert('Failed to update pledge status. Check database enum values.')
+    alert(`Failed to update pledge status: ${err.message || 'Unknown error'}`)
   } finally {
     isUpdating.value = false
   }

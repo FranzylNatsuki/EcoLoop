@@ -69,6 +69,49 @@ const isLoadingRequests = ref(false)
 const isUpdatingRequest = ref(false)
 const { addToast } = useToast()
 
+const authorRating = ref<number>(5.0)
+const authorRatingNum = ref<number>(0)
+const myRating = ref<number>(0)
+const hoverRating = ref<number>(0)
+const isSubmittingRating = ref(false)
+
+function parseRequestNotes(notes?: string | null) {
+  if (!notes) return { preference: 'pickup', location: '', message: '' }
+  
+  let preference = 'pickup'
+  let location = ''
+  let message = ''
+
+  const prefMatch = notes.match(/Preference:\s*([^\n]+)/i)
+  if (prefMatch) {
+    const rawPref = prefMatch[1].trim().toLowerCase()
+    if (rawPref.includes('deliver')) preference = 'deliver'
+    else if (rawPref.includes('community') || rawPref.includes('com') || rawPref.includes('meet')) preference = 'community'
+    else preference = 'pickup'
+  }
+
+  const locMatch = notes.match(/Location:\s*([^\n]+)/i)
+  if (locMatch) {
+    location = locMatch[1].trim()
+  }
+
+  const msgMatch = notes.match(/(?:Buyer Notes|Message|Notes):\s*([\s\S]+)/i)
+  if (msgMatch) {
+    message = msgMatch[1].trim()
+  } else if (!prefMatch && !locMatch) {
+    message = notes
+  }
+
+  return { preference, location, message }
+}
+
+function getPreferenceLabel(pref: string) {
+  if (pref === 'deliver') return 'Delivery to Buyer'
+  if (pref === 'community') return 'Meet at Community Center'
+  if (pref === 'pickup') return 'Pickup from Seller'
+  return pref
+}
+
 const mapContainer = ref<HTMLElement | null>(null)
 let requestMapInstance: L.Map | null = null
 
@@ -106,6 +149,74 @@ const isOwner = computed(() => {
   const ownerId = post.value?.author_id || post.value?.user_id || post.value?.seller_id
   return Boolean(currentUser.value?.id && ownerId && currentUser.value.id === ownerId)
 })
+
+const myPurchaseRequest = computed(() => {
+  if (isOwner.value || !currentUser.value) return null
+  return purchaseRequests.value.find(r => r.buyer_id === currentUser.value?.id) || null
+})
+
+const rateeUser = computed(() => {
+  if (isOwner.value) {
+    const acceptedReq = purchaseRequests.value.find(r => r.status === 'accepted')
+    if (acceptedReq?.buyer) {
+      return { id: acceptedReq.buyer_id, name: acceptedReq.buyer.full_name || 'Buyer', role: 'Buyer' }
+    }
+    return null
+  }
+  if (myPurchaseRequest.value?.status === 'accepted' || (myPurchaseRequest.value && post.value?.status === 'sold')) {
+    if (post.value?.author) {
+      return { id: post.value.author_id, name: post.value.author.full_name || 'Seller', role: 'Seller' }
+    }
+  }
+  return null
+})
+
+async function fetchUserRating() {
+  if (!currentUser.value || !rateeUser.value) return
+  try {
+    const { data: ratingData } = await supabase
+      .from('user_ratings')
+      .select('score')
+      .eq('rater_id', currentUser.value.id)
+      .eq('ratee_id', rateeUser.value.id)
+      .maybeSingle()
+    if (ratingData) {
+      myRating.value = ratingData.score
+    }
+  } catch (err: any) {
+    console.warn('Error fetching rating:', err.message)
+  }
+}
+
+watch(rateeUser, (newVal) => {
+  if (newVal) fetchUserRating()
+}, { immediate: true })
+
+async function submitRating(score: number) {
+  if (!currentUser.value || !rateeUser.value || isSubmittingRating.value) return
+  isSubmittingRating.value = true
+  myRating.value = score
+
+  try {
+    const { error: ratingErr } = await supabase
+      .from('user_ratings')
+      .upsert({
+        rater_id: currentUser.value.id,
+        ratee_id: rateeUser.value.id,
+        score: score
+      }, {
+        onConflict: 'rater_id, ratee_id'
+      })
+
+    if (ratingErr) throw ratingErr
+    addToast('Rating saved! Thank you for rating your experience.', 'success')
+  } catch (err: any) {
+    console.error('Failed to submit rating:', err.message)
+    addToast('Could not save rating.', 'error')
+  } finally {
+    isSubmittingRating.value = false
+  }
+}
 
 const isEditAllowed = computed(() => purchaseRequests.value.length === 0)
 
@@ -166,24 +277,40 @@ async function fetchPostDetails() {
   const authorRecord = getAuthorRecord(data.author)
   const profileRecord = getProfileRecord(authorRecord?.profile_data)
 
+  // Fetch author rating average from user_ratings
+  let avgAuthorRating = 0
+  let ratingCount = 0
+  try {
+    const { data: aRatings } = await supabase
+      .from('user_ratings')
+      .select('score')
+      .eq('ratee_id', data.author_id)
+    if (aRatings && aRatings.length > 0) {
+      ratingCount = aRatings.length
+      avgAuthorRating = aRatings.reduce((sum: number, r: any) => sum + r.score, 0) / aRatings.length
+    }
+  } catch (e) {
+    console.warn('Error fetching author ratings:', e)
+  }
+
+  authorRating.value = avgAuthorRating || profileRecord?.CommunityScore || 5.0
+  authorRatingNum.value = ratingCount
+
   post.value = {
     ...data,
     author: {
       ...authorRecord,
       full_name: authorRecord?.full_name || 'Unknown User',
       Avatar: profileRecord?.Avatar || 'https://placehold.co/38x38',
-      about: profileRecord?.about || 'No bio available.'
+      about: profileRecord?.about || 'No bio available.',
+      rating: authorRating.value,
+      ratingCount: authorRatingNum.value
     }
   }
 }
 
 async function fetchPurchaseRequests() {
-  if (!post.value || !isOwner.value || !currentUser.value) {
-    console.log('[MarketDetail] Skipping purchase requests fetch:', {
-      hasPost: Boolean(post.value),
-      isOwner: isOwner.value,
-      hasUser: Boolean(currentUser.value)
-    })
+  if (!post.value || !currentUser.value) {
     purchaseRequests.value = []
     return
   }
@@ -193,12 +320,19 @@ async function fetchPurchaseRequests() {
     const postId = post.value.id
     console.log('[MarketDetail] Fetching purchase requests for post_id:', postId)
 
-    // Step 1: Fetch raw requests for this post
-    const { data: requests, error: requestsError } = await supabase
+    // Step 1: Fetch raw requests for this post.
+    // Sellers see all requests for their listing; buyers see their own requests
+    let query = supabase
       .from('purchase_requests')
       .select('*')
       .eq('post_id', postId)
       .order('created_at', { ascending: false })
+
+    if (!isOwner.value) {
+      query = query.eq('buyer_id', currentUser.value.id)
+    }
+
+    const { data: requests, error: requestsError } = await query
 
     if (requestsError) {
       console.error('[MarketDetail] Error fetching purchase requests:', requestsError)
@@ -231,12 +365,28 @@ async function fetchPurchaseRequests() {
         `)
         .in('id', buyerIds)
 
+      // Fetch buyer ratings from user_ratings
+      const { data: ratingsData } = await supabase
+        .from('user_ratings')
+        .select('ratee_id, score')
+        .in('ratee_id', buyerIds)
+
+      const ratingsMap = new Map<string, { total: number, count: number }>()
+      if (ratingsData) {
+        ratingsData.forEach((r: any) => {
+          const curr = ratingsMap.get(r.ratee_id) || { total: 0, count: 0 }
+          ratingsMap.set(r.ratee_id, { total: curr.total + r.score, count: curr.count + 1 })
+        })
+      }
+
       if (profilesError) {
         console.warn('[MarketDetail] Warning fetching profiles, using fallback IDs:', profilesError)
       } else if (profiles) {
         profileMap = new Map(
           profiles.map((profile: any) => {
             const pData = getProfileRecord(profile.profile_data)
+            const rInfo = ratingsMap.get(profile.id)
+            const avgRating = rInfo && rInfo.count > 0 ? (rInfo.total / rInfo.count) : (pData?.CommunityScore || 5.0)
             return [
               profile.id,
               {
@@ -248,7 +398,7 @@ async function fetchPurchaseRequests() {
                 latitude: profile.latitude,
                 longitude: profile.longitude,
                 avatar_url: pData?.Avatar || null,
-                score: pData?.CommunityScore || 0
+                score: avgRating
               }
             ]
           })
@@ -558,6 +708,8 @@ const authorProfile = computed(() => {
     bio: post.value.author.about,
     postCount: 0,
     communityScore: profileRecord?.CommunityScore || 0,
+    rating: authorRating.value,
+    ratingCount: authorRatingNum.value,
     joinedYear: post.value.author.created_at
       ? new Date(post.value.author.created_at).getFullYear().toString()
       : 'Unknown'
@@ -696,6 +848,7 @@ async function handleShare() {
         </div>
       </article>
 
+      <!-- Owner: Purchase Requests Section -->
       <section v-if="isOwner && !authLoading" class="detail-card purchase-requests">
         <div class="section-header">
           <h2>Purchase Requests</h2>
@@ -717,13 +870,86 @@ async function handleShare() {
             class="request-avatar"
           />
           <span class="request-info">
-            <strong>{{ request.buyer?.full_name || request.buyer?.username || `Buyer ${request.buyer_id?.slice(0, 8) || 'Unknown'}` }}</strong>
-            <small>{{ request.created_at ? new Date(request.created_at).toLocaleString() : request.status || 'Pending' }}</small>
-            <small v-if="request.quantity !== null && request.quantity !== undefined">Quantity: {{ request.quantity }}</small>
-            <small v-if="request.notes">{{ request.notes }}</small>
-            <span v-if="request.status" class="status-tag">{{ request.status }}</span>
+            <div class="request-header-row">
+              <strong>{{ request.buyer?.full_name || request.buyer?.username || `Buyer ${request.buyer_id?.slice(0, 8) || 'Unknown'}` }}</strong>
+              <span v-if="request.buyer?.score" class="buyer-rating-tag">⭐ {{ request.buyer.score.toFixed(1) }}</span>
+            </div>
+
+            <!-- Handover & Logistics Tag -->
+            <div class="request-logistics-pill" :class="parseRequestNotes(request.notes).preference">
+              <span class="pref-badge">{{ getPreferenceLabel(parseRequestNotes(request.notes).preference) }}</span>
+              <span class="pref-loc">📍 {{ parseRequestNotes(request.notes).location || request.buyer?.address || 'Location coordinated upon acceptance' }}</span>
+            </div>
+
+            <small class="request-meta-row">
+              <span>{{ request.created_at ? new Date(request.created_at).toLocaleDateString() : 'Recently' }}</span>
+              <span v-if="request.quantity !== null && request.quantity !== undefined">· Qty: {{ request.quantity }}</span>
+            </small>
+            <small v-if="parseRequestNotes(request.notes).message" class="buyer-note-snippet">"{{ parseRequestNotes(request.notes).message }}"</small>
+            <span v-if="request.status" class="status-tag" :class="request.status">{{ request.status }}</span>
           </span>
         </button>
+      </section>
+
+      <!-- Buyer: Your Purchase Request Card on Market Listing -->
+      <section v-if="myPurchaseRequest && !isOwner" class="detail-card buyer-request-status-card">
+        <div class="section-header">
+          <h2>Your Purchase Request</h2>
+          <span class="status-badge" :class="myPurchaseRequest.status || 'pending'">
+            {{ myPurchaseRequest.status === 'accepted' ? 'Accepted by Seller' : 'Pending Seller Review' }}
+          </span>
+        </div>
+
+        <div class="logistics-card-inner">
+          <div class="logistics-row">
+            <span class="logistics-label">Handover Preference:</span>
+            <span class="preference-badge" :class="parseRequestNotes(myPurchaseRequest.notes).preference">
+              {{ getPreferenceLabel(parseRequestNotes(myPurchaseRequest.notes).preference) }}
+            </span>
+          </div>
+
+          <div class="logistics-row">
+            <span class="logistics-label">Location Details:</span>
+            <span class="location-val">📍 {{ parseRequestNotes(myPurchaseRequest.notes).location || post.location_address || 'Coordinate with seller' }}</span>
+          </div>
+
+          <div class="logistics-row">
+            <span class="logistics-label">Quantity:</span>
+            <span class="qty-val">{{ myPurchaseRequest.quantity }} {{ post.quantity_unit || 'items' }}</span>
+          </div>
+
+          <div v-if="parseRequestNotes(myPurchaseRequest.notes).message" class="logistics-row">
+            <span class="logistics-label">Your Note:</span>
+            <p class="buyer-note-quote">"{{ parseRequestNotes(myPurchaseRequest.notes).message }}"</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Interactive Rating Card (Visible when transaction is accepted or listing sold) -->
+      <section v-if="rateeUser" class="detail-card rating-card">
+        <div class="section-header">
+          <h2>{{ isOwner ? `Rate the Buyer (${rateeUser.name})` : `Rate the Seller (${rateeUser.name})` }}</h2>
+          <p>Help keep the EcoLoop community safe and trustworthy by rating your handover experience.</p>
+        </div>
+
+        <div class="stars-container" @mouseleave="hoverRating = 0">
+          <button
+            v-for="star in 5"
+            :key="star"
+            class="star-btn"
+            :class="{ 'is-active': star <= (hoverRating || myRating) }"
+            :disabled="isSubmittingRating"
+            type="button"
+            @mouseover="hoverRating = star"
+            @click="submitRating(star)"
+          >
+            <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+            </svg>
+          </button>
+        </div>
+
+        <span v-if="myRating > 0" class="rating-status-text">Your rating is saved! ({{ myRating }} / 5 stars)</span>
       </section>
 
       <PostCommentSection
@@ -802,18 +1028,29 @@ async function handleShare() {
             </div>
           </div>
           
+          <!-- Handover & Logistics Box -->
+          <div class="location-box">
+            <h4>Handover & Location Details</h4>
+            <div class="modal-logistics-row">
+              <span class="logistics-label">Preference:</span>
+              <span class="preference-badge" :class="parseRequestNotes(selectedRequest.notes).preference">
+                {{ getPreferenceLabel(parseRequestNotes(selectedRequest.notes).preference) }}
+              </span>
+            </div>
+            <div class="modal-logistics-row location-row-wrap" v-if="parseRequestNotes(selectedRequest.notes).location || selectedRequest.buyer?.address || post?.location_address">
+              <span class="logistics-label">Location:</span>
+              <span class="address-text">
+                📍 {{ parseRequestNotes(selectedRequest.notes).location || selectedRequest.buyer?.address || post?.location_address }}
+              </span>
+            </div>
+            <div v-if="selectedRequest.buyer?.latitude && selectedRequest.buyer?.longitude" ref="mapContainer" class="modal-map"></div>
+          </div>
+
           <!-- Contact Info -->
           <div class="contact-info-box" v-if="selectedRequest.buyer?.email || selectedRequest.buyer?.contact_number">
             <h4>Contact Buyer</h4>
             <p v-if="selectedRequest.buyer.email"><strong>Email:</strong> {{ selectedRequest.buyer.email }}</p>
             <p v-if="selectedRequest.buyer.contact_number"><strong>Phone:</strong> {{ selectedRequest.buyer.contact_number }}</p>
-          </div>
-          
-          <!-- Map & Location -->
-          <div class="location-box" v-if="selectedRequest.buyer?.address || selectedRequest.buyer?.latitude">
-            <h4>Buyer's Location</h4>
-            <p v-if="selectedRequest.buyer.address" class="address-text">{{ selectedRequest.buyer.address }}</p>
-            <div v-if="selectedRequest.buyer.latitude && selectedRequest.buyer.longitude" ref="mapContainer" class="modal-map"></div>
           </div>
 
           <!-- Request Summary Grid -->
@@ -835,9 +1072,9 @@ async function handleShare() {
           </div>
 
           <!-- Buyer Notes -->
-          <div v-if="selectedRequest.notes" class="buyer-notes-box">
+          <div v-if="parseRequestNotes(selectedRequest.notes).message" class="buyer-notes-box">
             <strong>Note from Buyer:</strong>
-            <p>"{{ selectedRequest.notes }}"</p>
+            <p>"{{ parseRequestNotes(selectedRequest.notes).message }}"</p>
           </div>
         </div>
 
@@ -934,6 +1171,227 @@ h1 { margin: 8px 0; color: #1a1d1a; }
 
 .request-info { display: flex; flex-direction: column; gap: 4px; }
 .request-info small { color: #8f9a8f; }
+
+/* Request Header & Info */
+.request-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.buyer-rating-tag {
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 10px;
+}
+
+.request-logistics-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 3px 0;
+  flex-wrap: wrap;
+}
+
+.pref-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f0f4ea;
+  color: #556b2f;
+}
+
+.request-logistics-pill.deliver .pref-badge {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.request-logistics-pill.community .pref-badge {
+  background: #f5f3ff;
+  color: #6d28d9;
+}
+
+.request-logistics-pill.pickup .pref-badge {
+  background: #f0f4ea;
+  color: #556b2f;
+}
+
+.pref-loc {
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.request-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #8f9a8f;
+  font-size: 12px;
+}
+
+.buyer-note-snippet {
+  font-style: italic;
+  color: #5d4037;
+  font-size: 12px;
+}
+
+/* Buyer Request Status Card */
+.buyer-request-status-card {
+  border: 1px solid #d1fae5;
+  background: #f0fdf4;
+}
+
+.buyer-request-status-card .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.buyer-request-status-card .section-header h2 {
+  margin: 0;
+}
+
+.logistics-card-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.logistics-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.logistics-label {
+  font-weight: 600;
+  color: #4b5563;
+  min-width: 140px;
+}
+
+.preference-badge {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: #f0f4ea;
+  color: #556b2f;
+}
+
+.preference-badge.deliver {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.preference-badge.community {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.preference-badge.pickup {
+  background: #f0f4ea;
+  color: #556b2f;
+}
+
+.location-val, .qty-val {
+  font-weight: 600;
+  color: #1a1d1a;
+}
+
+.buyer-note-quote {
+  margin: 0;
+  font-style: italic;
+  color: #475569;
+}
+
+/* Modal logistics row */
+.modal-logistics-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.modal-logistics-row.location-row-wrap {
+  align-items: flex-start;
+}
+
+.modal-logistics-row.location-row-wrap .address-text {
+  margin: 0 !important;
+}
+
+/* Rating Card */
+.rating-card {
+  text-align: center;
+  background: #fcfdfa;
+  border: 1px dashed #c9d8a3;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.rating-card .section-header h2 {
+  font-size: 18px;
+  margin-bottom: 4px;
+}
+
+.rating-card .section-header p {
+  margin-bottom: 16px;
+}
+
+.stars-container {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.star-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #e2e8f0;
+  transition: color 0.15s ease, transform 0.1s ease;
+}
+
+.star-btn svg {
+  width: 32px;
+  height: 32px;
+}
+
+.star-btn.is-active {
+  color: #f59e0b;
+}
+
+.star-btn:hover:not(:disabled) {
+  transform: scale(1.15);
+}
+
+.star-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.rating-status-text {
+  display: block;
+  margin-top: 12px;
+  font-size: 13px;
+  color: #778732;
+  font-weight: 700;
+}
 
 /* Page States */
 .state-card { max-width: 600px; margin: 80px auto; padding: 32px; text-align: center; color: #666; }

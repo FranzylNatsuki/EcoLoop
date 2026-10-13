@@ -40,7 +40,9 @@ async function handleToggleFollow() {
   const newState = await toggleFollow(String(props.event.id), currentUserId.value, isFollowing.value)
   isFollowing.value = newState
   if (newState) {
-    addToast('You will be notified about updates for this event!', 'success')
+    addToast('Event reminder active! Pinned in your notifications with time left.', 'success')
+  } else {
+    addToast('Event reminder removed from notifications.', 'info')
   }
 }
 
@@ -80,6 +82,18 @@ function handleImageError(event: Event) {
   const img = event.target as HTMLImageElement
   img.src = defaultPlaceholder
 }
+
+const fundedPercentage = computed(() => {
+  if (props.event.fulfillment_percent !== undefined && props.event.fulfillment_percent !== null) {
+    return Number(props.event.fulfillment_percent)
+  }
+  const target = Number(props.event.target_items || 0)
+  const donated = Number(props.event.donated_items || 0)
+  if (target > 0) {
+    return Math.min(100, Math.round((donated / target) * 100))
+  }
+  return 0
+})
 </script>
 
 <template>
@@ -135,6 +149,23 @@ function handleImageError(event: Event) {
       </div>
     </div>
 
+    <!-- Funding Progress Bar in Feed -->
+    <div class="funding-section">
+      <div class="funding-header">
+        <span class="funding-title">Material Goal</span>
+        <span class="funded-label">{{ fundedPercentage }}% Funded</span>
+      </div>
+      <div class="progress-bar-track">
+        <div
+          class="progress-bar-fill"
+          :style="{ width: `${Math.min(100, Math.max(0, fundedPercentage))}%` }"
+        ></div>
+      </div>
+      <div v-if="event.target_items" class="funding-meta">
+        <span>{{ event.donated_items || 0 }} of {{ event.target_items }} items pledged</span>
+      </div>
+    </div>
+
     <div class="card-footer">
       <button type="button" class="share-action-btn" @click.stop="handleShare">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -151,6 +182,7 @@ function handleImageError(event: Event) {
           :class="{ active: isFollowing }"
           @click.stop="handleToggleFollow"
           :disabled="isUpdating"
+          :title="isFollowing ? 'Event reminder active (Pinned in notifications)' : 'Follow to pin countdown in notifications'"
         >
           <CheckCircle2 v-if="isFollowing" :size="16" />
           <BellRing v-else :size="16" />
@@ -300,6 +332,57 @@ function handleImageError(event: Event) {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.funding-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #f7f9f6;
+  border: 1px solid #e2e8df;
+  border-radius: 10px;
+  padding: 12px 16px;
+  box-sizing: border-box;
+}
+
+.funding-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.funding-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #525a52;
+}
+
+.funded-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #778732;
+}
+
+.progress-bar-track {
+  width: 100%;
+  height: 8px;
+  background: #e4e7e3;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: #778732;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.funding-meta {
+  font-size: 11px;
+  color: #737c72;
 }
 
 .card-footer {

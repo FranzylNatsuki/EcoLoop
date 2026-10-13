@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { MessageCircle, Share2, Heart } from 'lucide-vue-next'
 import DonateMaterialsModal from '../Modals/DonateMaterialsModal.vue'
 import EditPostModal from '../Modals/EditPostModal.vue'
 import ThankYouDonationModal from '../Modals/ThankYouDonationModal.vue'
 import { supabase } from '../../composables/useAuth'
+import { usePosts } from '../../composables/usePosts'
 
 function handlePostUpdated() {
   window.location.reload()
@@ -13,18 +14,24 @@ function handlePostUpdated() {
 
 const props = defineProps<{
   comments: number
-  votes: number // <-- Added for Likes
+  votes: number
   postId?: string | number
   hideComments?: boolean
   projectName?: string
   authorUsername?: string
   isOwner?: boolean
-  isCompleted?: boolean // <-- Added for Completion State
+  isCompleted?: boolean
 }>()
 
-defineEmits<{ share: []; donate: []; map: [] }>()
+const emit = defineEmits<{
+  (e: 'share'): void
+  (e: 'donate'): void
+  (e: 'map'): void
+  (e: 'update:votes', votes: number): void
+}>()
 
 const router = useRouter()
+const { posts } = usePosts()
 
 // Modal Visibility Controls
 const showDonateModal = ref(false)
@@ -32,9 +39,17 @@ const showThankYouModal = ref(false)
 const showEditModal = ref(false)
 
 // Like State
-const localVotes = ref(props.votes || 0)
+const localVotes = ref(Number(props.votes) || 0)
 const hasLiked = ref(false)
 const isLiking = ref(false)
+
+// Keep localVotes in sync if parent votes prop updates
+watch(
+  () => props.votes,
+  (newVotes) => {
+    localVotes.value = Number(newVotes) || 0
+  }
+)
 
 // Donation Summary State
 const donationSummary = ref({
@@ -49,7 +64,7 @@ function openPost() {
 }
 
 function handleDonateClick() {
-  if (props.isCompleted) return // Block if completed
+  if (props.isCompleted) return
 
   if (!props.postId || String(props.postId).length < 20) {
     alert("Cannot donate to this post: It's using mock data without a real Database UUID.")
@@ -96,27 +111,76 @@ async function handleShare() {
 // Like Toggle Logic
 async function toggleLike() {
   if (!props.postId || isLiking.value) return
+  isLiking.value = true // Synchronously lock to prevent fast double-clicks
 
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) {
-    alert('Please log in to like posts.')
-    return
-  }
-
-  isLiking.value = true
-  const userId = session.user.id
+  const postId = String(props.postId)
 
   try {
-    if (hasLiked.value) {
-      // Unlike
-      await supabase.from('post_likes').delete().eq('post_id', props.postId).eq('user_id', userId)
-      localVotes.value--
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.user) {
+      alert('Please log in to like posts.')
+      return
+    }
+
+    const userId = session.user.id
+    const wasLiked = hasLiked.value
+    const previousVotes = localVotes.value
+
+    if (wasLiked) {
+      // Optimistic update for unlike
       hasLiked.value = false
+      localVotes.value = Math.max(0, localVotes.value - 1)
+
+      const { error } = await supabase
+        .from('post_likes')
+        .delete()
+        .eq('post_id', postId)
+        .eq('user_id', userId)
+
+      if (error) {
+        console.error('Failed to unlike post:', error)
+        // Rollback
+        hasLiked.value = wasLiked
+        localVotes.value = previousVotes
+        return
+      }
     } else {
-      // Like
-      await supabase.from('post_likes').insert({ post_id: props.postId, user_id: userId })
-      localVotes.value++
+      // Optimistic update for like
       hasLiked.value = true
+      localVotes.value = localVotes.value + 1
+
+      const { error } = await supabase
+        .from('post_likes')
+        .insert({ post_id: postId, user_id: userId })
+
+      if (error) {
+        if (error.code === '23505') {
+          // Already liked in database, keep hasLiked true
+          hasLiked.value = true
+        } else {
+          console.error('Failed to like post:', error)
+          // Rollback
+          hasLiked.value = wasLiked
+          localVotes.value = previousVotes
+          return
+        }
+      }
+    }
+
+    // Query exact count directly from post_likes to guarantee 100% accuracy
+    const { count, error: countError } = await supabase
+      .from('post_likes')
+      .select('*', { count: 'exact', head: true })
+      .eq('post_id', postId)
+
+    const finalVotes = (!countError && count !== null) ? count : localVotes.value
+    localVotes.value = finalVotes
+    emit('update:votes', finalVotes)
+
+    // Sync in usePosts shared ref so feed and sorting stay up to date
+    const targetPost = posts.value.find((p) => String(p.id) === postId)
+    if (targetPost) {
+      targetPost.vote_count = finalVotes
     }
   } catch (err) {
     console.error('Error toggling like:', err)
@@ -129,25 +193,11 @@ async function toggleLike() {
 const fetchedProjectName = ref(props.projectName || '')
 const fetchedAuthorName = ref(props.authorUsername || '')
 
-onMounted(async () => {
+async function fetchAuthorDetails() {
   if (!props.postId) return
+  if (fetchedProjectName.value && fetchedAuthorName.value) return
 
-  const { data: { session } } = await supabase.auth.getSession()
-
-  // 1. Check if the user has already liked this post
-  if (session?.user?.id) {
-    const { data: likeData } = await supabase
-      .from('post_likes')
-      .select('user_id')
-      .eq('post_id', props.postId)
-      .eq('user_id', session.user.id)
-      .maybeSingle()
-
-    if (likeData) hasLiked.value = true
-  }
-
-  // 2. Fetch Author if missing
-  if (!fetchedProjectName.value || !fetchedAuthorName.value) {
+  try {
     const { data, error } = await supabase
       .from('cause_requests')
       .select(`title, profiles(full_name)`)
@@ -156,16 +206,66 @@ onMounted(async () => {
 
     if (!error && data) {
       const postData = data as any
-      fetchedProjectName.value = postData.title
-
-      let authorName = 'Unknown User'
-      if (postData.profiles) {
-        const profileInfo = Array.isArray(postData.profiles) ? postData.profiles[0] : postData.profiles
-        authorName = profileInfo?.full_name || 'Unknown User'
+      if (!fetchedProjectName.value) {
+        fetchedProjectName.value = postData.title || ''
       }
-      fetchedAuthorName.value = authorName
+
+      if (!fetchedAuthorName.value && postData.profiles) {
+        const profileInfo = Array.isArray(postData.profiles) ? postData.profiles[0] : postData.profiles
+        fetchedAuthorName.value = profileInfo?.full_name || 'Unknown User'
+      }
     }
+  } catch (err) {
+    console.error('Failed to fetch author details:', err)
   }
+}
+
+async function initPostState() {
+  if (!props.postId) {
+    hasLiked.value = false
+    return
+  }
+
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.user?.id) {
+      const { data: likeData, error } = await supabase
+        .from('post_likes')
+        .select('user_id')
+        .eq('post_id', props.postId)
+        .eq('user_id', session.user.id)
+        .maybeSingle()
+
+      if (!error && likeData) {
+        hasLiked.value = true
+      } else {
+        hasLiked.value = false
+      }
+    } else {
+      hasLiked.value = false
+    }
+  } catch (err) {
+    console.error('Error checking like status:', err)
+  }
+
+  fetchAuthorDetails()
+}
+
+onMounted(() => {
+  initPostState()
+})
+
+watch(() => props.postId, () => {
+  localVotes.value = Number(props.votes) || 0
+  initPostState()
+})
+
+watch(() => props.projectName, (val) => {
+  if (val) fetchedProjectName.value = val
+})
+
+watch(() => props.authorUsername, (val) => {
+  if (val) fetchedAuthorName.value = val
 })
 
 async function handleDeletePost() {
@@ -203,9 +303,9 @@ async function handleDeletePost() {
   <div class="post-footer">
     <div class="actions-left">
       <!-- New Like Button -->
-      <button class="footer-action" :class="{ 'is-liked': hasLiked }" @click.stop="toggleLike">
+      <button class="footer-action" :class="{ 'is-liked': hasLiked }" :disabled="isLiking" @click.stop="toggleLike">
         <Heart :size="14" :fill="hasLiked ? 'currentColor' : 'none'" />
-        <span>{{ localVotes }} Likes</span>
+        <span>{{ localVotes }} {{ localVotes === 1 ? 'Like' : 'Likes' }}</span>
       </button>
 
       <button v-if="!hideComments" class="footer-action" @click="openPost">
@@ -307,6 +407,11 @@ async function handleDeletePost() {
 .footer-action:hover {
   background: #e4e7e3;
   color: #1a1d1a;
+}
+
+.footer-action:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
 /* Liked State CSS */

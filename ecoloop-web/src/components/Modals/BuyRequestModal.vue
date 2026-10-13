@@ -29,7 +29,9 @@ const dialogRef = ref<HTMLDialogElement | null>(null)
 const selectedMaterial = ref('')
 const requestedQuantity = ref(1)
 const messageText = ref('')
-const pickupPreference = ref('pickup')
+const pickupPreference = ref<'pickup' | 'community' | 'deliver'>('pickup')
+const deliveryAddress = ref('')
+const comCenterLocation = ref('')
 const isSubmitting = ref(false)
 const { addToast } = useToast()
 
@@ -66,6 +68,30 @@ watch(() => props.modelValue, async (open) => {
   if (open) {
     selectedMaterial.value = materialName(availableMaterials.value[0])
     requestedQuantity.value = 1
+
+    // Prefill user delivery address from profile if available
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('address')
+          .eq('id', session.user.id)
+          .maybeSingle()
+        if (profile?.address && !deliveryAddress.value) {
+          deliveryAddress.value = profile.address
+        }
+      }
+    } catch (e) {
+      console.warn('Could not prefill address:', e)
+    }
+
+    if (!comCenterLocation.value) {
+      comCenterLocation.value = props.post?.location_address
+        ? `${props.post.location_address} Community Center`
+        : 'Barangay Community Center'
+    }
+
     await nextTick()
     if (dialogRef.value && !dialogRef.value.open) dialogRef.value.showModal()
   } else if (dialogRef.value?.open) {
@@ -113,12 +139,16 @@ async function submit() {
     }
 
     const currentUserId = session.user.id
-    let finalNotes = `Preference: ${pickupPreference.value}`;
-    if (messageText.value) {
-      finalNotes += `
 
-Buyer Notes:
-${messageText.value}`;
+    const chosenLocation = pickupPreference.value === 'deliver'
+      ? (deliveryAddress.value.trim() || 'Buyer delivery address')
+      : pickupPreference.value === 'community'
+      ? (comCenterLocation.value.trim() || 'Community Center')
+      : (props.post?.location_address || 'Seller location')
+
+    let finalNotes = `Preference: ${pickupPreference.value}\nLocation: ${chosenLocation}`;
+    if (messageText.value.trim()) {
+      finalNotes += `\nBuyer Notes: ${messageText.value.trim()}`;
     }
 
     const payload = {
@@ -185,23 +215,53 @@ function blockInvalidNumberChars(e: KeyboardEvent) {
         </div>
 
         <div class="form-group radio-section">
-          <span class="field-label">Delivery Preference</span>
+          <span class="field-label">Delivery & Handover Preference</span>
           <div class="radio-group">
             <label class="radio-option" :class="{ active: pickupPreference === 'pickup' }">
               <input type="radio" v-model="pickupPreference" value="pickup" class="sr-only" />
               <span class="radio-dot"></span>
               <span class="option-label">I will pick it up</span>
             </label>
+            <label class="radio-option" :class="{ active: pickupPreference === 'community' }">
+              <input type="radio" v-model="pickupPreference" value="community" class="sr-only" />
+              <span class="radio-dot"></span>
+              <span class="option-label">Meet at com center</span>
+            </label>
             <label class="radio-option" :class="{ active: pickupPreference === 'deliver' }">
               <input type="radio" v-model="pickupPreference" value="deliver" class="sr-only" />
               <span class="radio-dot"></span>
               <span class="option-label">Please deliver to me</span>
             </label>
-            <label class="radio-option" :class="{ active: pickupPreference === 'meetup' }">
-              <input type="radio" v-model="pickupPreference" value="meetup" class="sr-only" />
-              <span class="radio-dot"></span>
-              <span class="option-label">Meet at public place</span>
-            </label>
+          </div>
+
+          <!-- Dynamic Location Details based on Selected Preference -->
+          <div class="location-preference-box">
+            <div v-if="pickupPreference === 'pickup'" class="info-location-note">
+              <span class="loc-label">Pickup Location:</span>
+              <p class="loc-val">📍 {{ post?.location_address || 'Seller pickup location (coordinate with seller upon acceptance)' }}</p>
+            </div>
+
+            <div v-else-if="pickupPreference === 'community'" class="input-location-row">
+              <label class="field-sublabel">Community Center / Meeting Place:</label>
+              <input
+                v-model="comCenterLocation"
+                type="text"
+                class="input-box"
+                placeholder="e.g. Barangay Hall / Central Community Center"
+                required
+              />
+            </div>
+
+            <div v-else-if="pickupPreference === 'deliver'" class="input-location-row">
+              <label class="field-sublabel">Delivery Address:</label>
+              <input
+                v-model="deliveryAddress"
+                type="text"
+                class="input-box"
+                placeholder="Enter complete delivery street address, city"
+                required
+              />
+            </div>
           </div>
         </div>
 
@@ -278,5 +338,37 @@ function blockInvalidNumberChars(e: KeyboardEvent) {
 .radio-option.active .radio-dot::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 8px; height: 8px; background: #778732; border-radius: 50%; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
 @media (min-width: 480px) { .radio-group { flex-direction: row; } .radio-option { flex: 1; justify-content: center; padding: 12px; } }
+
+.location-preference-box {
+  margin-top: 12px;
+}
+.info-location-note {
+  padding: 12px 14px;
+  background: #f7f9f5;
+  border: 1px solid #e1e7dc;
+  border-radius: 8px;
+}
+.loc-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #778732;
+  letter-spacing: 0.5px;
+}
+.loc-val {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: #2c332b;
+}
+.input-location-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.field-sublabel {
+  font-size: 12px;
+  font-weight: 600;
+  color: #3f473d;
+}
 </style>
 

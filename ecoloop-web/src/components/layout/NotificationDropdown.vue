@@ -19,7 +19,7 @@ onMounted(async () => {
 
     <div v-if="isLoading" class="loading-state">Loading...</div>
     <div v-else-if="notifications.length === 0" class="empty-state">
-      No new pledges yet.
+      No notifications yet.
     </div>
 
     <div v-else class="notifications-list">
@@ -38,21 +38,27 @@ onMounted(async () => {
   position: absolute;
   top: 100%;
   right: 0;
-  width: 320px;
+  width: 350px;
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   z-index: 50;
-  max-height: 400px;
+  max-height: 420px;
   overflow-y: auto;
 }
 .dropdown-header {
   padding: 12px 16px;
   border-bottom: 1px solid #eee;
 }
+.dropdown-header h4 {
+  margin: 0;
+  font-size: 1rem;
+  color: #1f2937;
+}
 .empty-state {
-  padding: 16px;
+  padding: 24px 16px;
   text-align: center;
   color: #666;
+  font-size: 0.9rem;
 }
 </style>
