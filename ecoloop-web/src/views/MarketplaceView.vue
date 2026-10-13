@@ -4,7 +4,6 @@ import { useRoute, useRouter } from 'vue-router'
 import PageLayout from '../components/layout/PageLayout.vue'
 import BuyRequestModal from '../components/Modals/BuyRequestModal.vue'
 import MarketplaceCard from '../components/marketplace/MarketplaceCard.vue'
-// import CommunityRules from '../components/sidebar/CommunityRules.vue'
 import CategoryBar from '../components/layout/CategoryBar.vue'
 import { useMarketplace } from '../composables/useMarketplace'
 import type { MarketplaceListing } from '../composables/useMarketplace'
@@ -132,7 +131,7 @@ async function refreshListings() {
         </div>
       </template>
 
-      <!-- Sidebar left blank so Community Rules doesn't show! -->
+      <!-- Sidebar -->
       <template #sidebar>
       </template>
     </PageLayout>

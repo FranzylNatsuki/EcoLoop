@@ -34,7 +34,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* Add your dropdown positioning and styling here */
 .notification-dropdown {
   position: absolute;
   top: 100%;

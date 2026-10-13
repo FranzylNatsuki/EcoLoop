@@ -16,6 +16,6 @@ const route = useRoute()
 .sticky-header {
 	position: sticky;
 	top: 0;
-	z-index: 100; /* Ensures the header stays above your scrolling content */
+	z-index: 100;
 }
 </style>

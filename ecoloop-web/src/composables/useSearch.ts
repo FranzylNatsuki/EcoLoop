@@ -46,7 +46,6 @@ export function useSearch() {
         .limit(3)
     ])
 
-    // DEBUG: Log any database errors directly to your browser console
     if (usersRes.error) console.error("Users Search DB Error:", usersRes.error.message)
     if (postsRes.error) console.error("Posts Search DB Error:", postsRes.error.message)
     if (eventsRes.error) console.error("Events Search DB Error:", eventsRes.error.message)

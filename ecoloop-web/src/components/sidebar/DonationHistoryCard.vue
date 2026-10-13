@@ -12,7 +12,7 @@ defineProps<{
   donations?: DonationItem[]
 }>()
 
-// Default fallback data matching your Figma design
+// Fallback data
 const defaultDonations: DonationItem[] = [
   { id: 1, title: '5 glass bottles to Community Garden Pavilion', date: 'Oct 12, 2026', status: 'Delivered' },
   { id: 2, title: '12 wood planks to Pallet Bench Project', date: 'Oct 08, 2026', status: 'Delivered' },

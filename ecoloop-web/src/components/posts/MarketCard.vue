@@ -87,10 +87,8 @@ function openPost() {
       <h2>{{ post.title }}</h2>
       <p>{{ post.body }}</p>
 
-      <!-- Updated: image -> coverImage (using the computed property) -->
       <div v-if="coverImage" class="image-container">
         <img :src="coverImage" :alt="post.title" class="post-image" />
-        <!-- Badge for multiple images (if you added the computed property) -->
         <div v-if="extraImagesCount > 0" class="more-images-badge">
           +{{ extraImagesCount }}
         </div>

@@ -73,3 +73,6 @@ resolve_script.py
 ecoloop-web/.vscode/
 ecoloop-web/.wrangler/tmp/pages-TTsLYw/
 ecoloop-web/supabase/migrations/
+ecoloop-web/parse_html.py
+ecoloop-web/parse_html.cjs
+ecoloop-web/out.txt

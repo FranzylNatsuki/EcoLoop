@@ -144,8 +144,6 @@ const handleRegister = async () => {
   try {
       isSubmitting.value = true
 
-      // 1. THIS IS ALL YOU NEED.
-      // Sending the data here triggers your SQL handle_new_user function automatically.
       const { data, error } = await supabase.auth.signUp({
         email: email.value,
         password: password.value,
@@ -155,7 +153,6 @@ const handleRegister = async () => {
             location: locationAddress.value,
             contact_number: contactNumber.value,
             is_org: isOrganization.value,
-            // Add these only if you added them to your SQL trigger
             latitude: latitude.value,
             longitude: longitude.value,
             address: locationAddress.value
@@ -166,7 +163,6 @@ const handleRegister = async () => {
       if (error) throw error
 
     if (data?.user) {
-      // 2. Insert into profiles AND CHECK FOR ERRORS
       const { error: profileError } = await supabase.from('profiles').insert({
         id: data.user.id,
         full_name: fullName.value,
@@ -182,7 +178,6 @@ const handleRegister = async () => {
         console.error("🚨 PROFILES DATABASE ERROR:", profileError.message, profileError.details)
       }
 
-      // 3. Initialize profile_data AND CHECK FOR ERRORS
       const { error: dataError } = await supabase.from('profile_data').upsert({
         id: data.user.id,
         about: '',
@@ -210,35 +205,6 @@ const handleRegister = async () => {
 
 <template>
   <div class="registration-page">
-      <!--
-    <div class="bg-illustration left">
-      <img
-        class="illustration-img"
-        src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSgLtlgdF4HSMs6YY3sOWOsa9dISXXqqVAJVU9Sr9rXdi8kLUqOY4K0B7E&s=10"
-        alt="Transforming Waste"
-      />
-      <div class="illustration-text">
-        <h3 class="illustration-title">Transforming Waste</h3>
-        <p class="illustration-description">
-          Learn composting and zero waste techniques shared live by neighbors.
-        </p>
-      </div>
-    </div>
-
-    <div class="bg-illustration right">
-      <img
-        class="illustration-img"
-        src="https://images.stockcake.com/public/4/a/3/4a36e2f2-4b2b-4b91-912b-a4b5baf948a8_large/recycling-in-park-stockcake.jpg"
-        alt="Upcycling Inspiration"
-      />
-      <div class="illustration-text">
-        <h3 class="illustration-title">Upcycling Inspiration</h3>
-        <p class="illustration-description">
-          Discover community projects and give a second life to old materials.
-        </p>
-      </div>
-    </div>
-    -->
     <div class="registration-card">
       <div class="card-header">
         <div class="brand-logo-icon">

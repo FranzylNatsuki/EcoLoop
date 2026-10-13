@@ -34,8 +34,6 @@ const handlePasswordUpdate = async () => {
   isSubmitting.value = true
 
   try {
-    // Because they clicked the magic email link, Supabase already gave them an active session.
-    // We can directly update their password now.
     const { error } = await supabase.auth.updateUser({
       password: newPassword.value
     })
@@ -45,7 +43,7 @@ const handlePasswordUpdate = async () => {
     } else {
       successMessage.value = 'Password updated successfully! Redirecting...'
       setTimeout(() => {
-        router.push('/home') // Log them into the app
+        router.push('/home')
       }, 2000)
     }
   } catch (err) {
@@ -128,7 +126,6 @@ const handlePasswordUpdate = async () => {
 </template>
 
 <style scoped>
-/* Paste the EXACT same CSS from Login.vue here! */
 /* Page Layout */
 .login-page {
   width: 100%;

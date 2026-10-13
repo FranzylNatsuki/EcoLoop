@@ -14,7 +14,6 @@ const handleResetRequest = async () => {
 
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email.value, {
-      // Change this to your production URL when you deploy
       redirectTo: `${window.location.origin}/update-password`,
     })
 
@@ -24,7 +23,7 @@ const handleResetRequest = async () => {
     } else {
       isError.value = false
       message.value = 'Check your email for the password reset link.'
-      email.value = '' // clear the input
+      email.value = ''
     }
   } catch (err) {
     isError.value = true
@@ -48,7 +47,6 @@ const handleResetRequest = async () => {
     <div class="login-card">
       <div class="card-header">
         <div class="brand-logo-icon">
-          <!-- Your EcoLoop Logo SVG -->
           <div data-svg-wrapper data-layer="Group 1" class="Group1" style="position: relative">
             <svg width="64" height="41" viewBox="0 0 64 41" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M25.1875 0.413086L29.5225 1.8584L33.0322 3.92285L36.9551 7.63867V8.05176L37.5742 8.46484L38.1934 9.91016L38.6064 10.1162L38.8125 10.9424L39.2256 11.1484L40.6709 14.8643L41.29 17.9609V23.123H27.8711L28.4902 25.3936L29.5225 27.458L31.3809 29.7295H31.7939L33.8584 26.4258H40.2578L39.6387 28.6973L37.5742 32.2061L35.5098 34.2715V34.6836H35.0967V35.0967H34.6836L33.6514 36.3359H33.2383L31.5869 37.7803L28.4902 39.4326L26.0127 40.2578L19.6133 40.8779L16.5166 40.4648L11.9746 39.0195L11.7676 38.6064L10.1162 37.9873L9.91016 37.5742L8.25781 36.748L4.74805 33.4453V33.0322L3.92285 32.4131V32L2.27051 29.9355L0.826172 26.4258L0 22.5029V18.374L0.826172 14.2451L2.47754 10.5293L4.33594 8.25781V7.84473L7.43262 4.74805H7.84473L10.1162 2.89062L13.626 1.23828L16.7227 0.413086L21.0576 0L25.1875 0.413086ZM14.8643 7.22266L13.2129 8.04785L11.5615 9.49316H11.1484L8.46484 12.3838L6.40039 16.9258V23.7383L7.43262 26.6289L7.84473 26.835L8.05176 27.6611L9.49707 29.3125V29.7256L11.9746 31.9961L14.0391 33.2354H14.4512V32.4092L15.0713 32.2031H14.4512L12.3867 30.1387V27.6611L14.4512 26.0098L16.1035 25.3896H19.6133L20.0254 26.4219L20.6455 26.835V27.4541L18.9932 30.9639L20.8516 28.8994L22.2969 31.377L23.3291 34.4736L24.9805 34.2676L26.4258 33.6484V33.2354L24.5674 30.9639L22.5029 26.835L21.4707 22.293V18.5771L22.5029 14.0352L23.5352 11.5576L23.9482 11.3516L25.1875 8.87402L26.0127 8.46094L27.252 9.08008L30.5547 11.7646L28.4902 15.2734L28.0771 17.1318H34.8906V16.7188L34.2715 14.8613L32.6191 11.9707L31.1738 10.3193H30.7617L30.5547 9.69922H30.1416L28.9033 8.46094L26.2197 7.01562L24.1553 6.39648L18.5811 6.19043L14.8643 7.22266ZM14.4482 26.8359L13.21 27.8682V28.2812H16.3066L17.958 27.6611L18.9902 26.6289V26.0098H16.7197L14.4482 26.8359Z" fill="#778732"/>
@@ -92,8 +90,6 @@ const handleResetRequest = async () => {
 </template>
 
 <style scoped>
-/* Paste the EXACT same CSS from Login.vue here! */
-/* (I am assuming you are using a shared CSS file for these layout classes, but if they are scoped in Login.vue, you should copy them directly into this block) */
 /* Page Layout */
 .login-page {
   width: 100%;

@@ -143,10 +143,6 @@ const getCategoryStyle = (category?: string) => {
 </template>
 
 <style scoped>
-/* unchanged from your version */
-</style>
-
-<style scoped>
 .listing-card {
   background: white;
   border-radius: 12px;

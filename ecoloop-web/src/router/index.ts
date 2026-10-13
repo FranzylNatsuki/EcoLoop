@@ -2,14 +2,12 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import HomeView from '../views/HomeView.vue'
 import EventsView from '../views/EventsView.vue'
-// import MarketplaceView from '../views/MarketplaceView.vue' // 1. Uncommented this
 import PostDetailView from '../views/PostDetailView.vue'
 import Registration from '../views/Registration.vue'
 import Profile from '../views/ProfileView.vue'
 import Login from '../views/Login.vue'
 import PublicProfileView from '../views/PublicProfileView.vue'
 
-// Import the new views
 import ForgotPassword from '../views/ForgotPassword.vue'
 import UpdatePassword from '../views/UpdatePassword.vue'
 
@@ -36,20 +34,18 @@ const router = createRouter({
       meta: { hideHeader: false },
     },
 
-    // Replace your unified marketplace route with these TWO routes:
-
-        {
-          path: '/marketplace',
-          name: 'marketplace',
-          component: () => import('../views/MarketplaceView.vue'), // The Grid View
-          meta: { hideHeader: false },
-        },
-        {
-          path: '/marketplace/:id',
-          name: 'MarketDetail',
-          component: () => import('../views/MarketDetailView.vue'), // The Full Detail Page
-          meta: { hideHeader: false },
-        },
+    {
+      path: '/marketplace',
+      name: 'marketplace',
+      component: () => import('../views/MarketplaceView.vue'),
+      meta: { hideHeader: false },
+    },
+    {
+      path: '/marketplace/:id',
+      name: 'MarketDetail',
+      component: () => import('../views/MarketDetailView.vue'),
+      meta: { hideHeader: false },
+    },
 
     {
       path: '/post/:id',

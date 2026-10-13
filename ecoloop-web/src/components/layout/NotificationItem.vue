@@ -11,7 +11,7 @@ const router = useRouter()
 // Format the date (e.g., "2 hours ago" or "Oct 12")
 const formattedDate = computed(() => {
   const date = new Date(props.pledge.created_at)
-  return date.toLocaleDateString() // You can swap this for date-fns formatDistanceToNow
+  return date.toLocaleDateString()
 })
 
 

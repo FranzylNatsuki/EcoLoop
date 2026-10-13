@@ -217,7 +217,6 @@ async function fetchPurchaseRequests() {
     let profileMap = new Map<string, any>()
 
     if (buyerIds.length > 0) {
-      // Query profiles matching your schema (joining profile_data for Avatar)
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select(`
