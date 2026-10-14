@@ -20,7 +20,14 @@ const categories = computed(() => {
       'Gardening',
       'Crafts & DIY',
       'Upcycling',
-      'Tree Planting'
+      'Tree Planting',
+      'Eco-Construction',
+      'Community Rebuild',
+      'Demolition & Salvage',
+      'Carpentry & Timber',
+      'Masonry & Concrete',
+      'Roofing & Structural',
+      'Building Materials'
     ]
   } else if (props.type === 'marketplace') {
     return [
@@ -45,7 +52,14 @@ const categories = computed(() => {
     'Clean-Up Drive',
     'Recycling Workshop',
     'Upcycling Event',
-    'Tree Planting'
+    'Tree Planting',
+    'Eco-Construction',
+    'Community Rebuild',
+    'Demolition & Salvage',
+    'Carpentry & Timber',
+    'Masonry & Concrete',
+    'Roofing & Structural',
+    'Building Materials'
   ]
 })
 
@@ -85,16 +99,31 @@ function isActive(category: string) {
 </template>
 
 <style scoped>
-/* Add the requested centering but keep all original styles */
 .categories-bar {
   display: flex;
-  justify-content: center;
-  flex-wrap: wrap; /* Good for responsiveness just in case */
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.categories-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.category-pill {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Provide an explicit active state matching hover from global styles */
 .category-pill.active {
   background: #f0f7f0;
   border-color: #a4ceaf;
+  font-weight: 500;
 }
 </style>

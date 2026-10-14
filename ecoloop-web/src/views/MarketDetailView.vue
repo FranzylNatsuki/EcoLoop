@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Share2, ChevronLeft, ChevronRight, MapPin, BadgeCheck } from 'lucide-vue-next'
+import { Share2, ChevronLeft, ChevronRight, MapPin, BadgeCheck, ExternalLink } from 'lucide-vue-next'
 import { supabase } from '../composables/useAuth'
 import { useToast } from '../composables/useToast'
 import PageLayout from '../components/layout/PageLayout.vue'
@@ -890,6 +890,12 @@ const materialOptions = computed(() => {
   }))
 })
 
+const currentImageUrl = computed(() => {
+  if (!post.value?.images || !post.value.images[currentImageIndex.value]) return ''
+  const img = post.value.images[currentImageIndex.value]
+  return typeof img === 'string' ? img : img.image_url || ''
+})
+
 function nextImage() {
   if (post.value?.images && currentImageIndex.value < post.value.images.length - 1) {
     currentImageIndex.value++
@@ -974,26 +980,57 @@ async function handleShare() {
 
         <div v-if="post.images?.length" class="carousel-container">
           <div class="carousel-inner">
-            <img
-              :src="post.images[currentImageIndex].image_url || post.images[currentImageIndex]"
-              :alt="post.title"
-              class="carousel-image"
-            />
+            <a
+              :href="currentImageUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="carousel-image-link"
+              title="Open image in new tab"
+            >
+              <img
+                :src="currentImageUrl"
+                :alt="post.title"
+                class="carousel-image"
+              />
+              <span class="carousel-open-hint" aria-hidden="true">
+                <ExternalLink :size="14" />
+                <span>Open in new tab</span>
+              </span>
+            </a>
 
             <!-- Controls -->
             <button
               v-if="post.images.length > 1 && currentImageIndex > 0"
               class="carousel-btn prev"
-              @click="prevImage"
+              type="button"
+              @click.stop="prevImage"
+              aria-label="Previous image"
             >
               <ChevronLeft :size="24" />
             </button>
             <button
               v-if="post.images.length > 1 && currentImageIndex < post.images.length - 1"
               class="carousel-btn next"
-              @click="nextImage"
+              type="button"
+              @click.stop="nextImage"
+              aria-label="Next image"
             >
               <ChevronRight :size="24" />
+            </button>
+          </div>
+
+          <!-- Thumbnails -->
+          <div v-if="post.images.length > 1" class="carousel-thumbnails">
+            <button
+              v-for="(img, idx) in post.images"
+              :key="idx"
+              type="button"
+              class="carousel-thumb-btn"
+              :class="{ active: currentImageIndex === Number(idx) }"
+              @click="currentImageIndex = Number(idx)"
+              :title="`View photo ${Number(idx) + 1}`"
+            >
+              <img :src="img.image_url || img" :alt="`${post.title} thumbnail ${Number(idx) + 1}`" />
             </button>
           </div>
 
@@ -1317,11 +1354,70 @@ h1 { margin: 8px 0; color: #1a1d1a; }
 /* Carousel */
 .carousel-container { position: relative; margin: 18px 0; display: flex; flex-direction: column; gap: 12px; }
 .carousel-inner { position: relative; width: 100%; height: 350px; border-radius: 12px; overflow: hidden; background: #f7f8f6; }
-.carousel-image { width: 100%; height: 100%; object-fit: contain; }
-.carousel-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.8); border: none; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #1a1d1a; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: background 0.2s; }
+.carousel-image-link { display: block; width: 100%; height: 100%; cursor: pointer; text-decoration: none; position: relative; }
+.carousel-image { width: 100%; height: 100%; object-fit: contain; transition: transform 0.25s ease; }
+.carousel-image-link:hover .carousel-image { transform: scale(1.02); }
+.carousel-open-hint {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(26, 29, 26, 0.75);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+.carousel-image-link:hover .carousel-open-hint {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+.carousel-btn { position: absolute; top: 50%; transform: translateY(-50%); background: rgba(255, 255, 255, 0.85); border: none; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #1a1d1a; box-shadow: 0 2px 8px rgba(0,0,0,0.1); transition: background 0.2s; z-index: 3; }
 .carousel-btn:hover { background: #fff; }
 .carousel-btn.prev { left: 12px; }
 .carousel-btn.next { right: 12px; }
+.carousel-thumbnails {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0;
+  justify-content: center;
+}
+.carousel-thumb-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 2px solid transparent;
+  padding: 0;
+  background: #f7f8f6;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+.carousel-thumb-btn:hover {
+  transform: translateY(-1px);
+  border-color: #cbd5e1;
+}
+.carousel-thumb-btn.active {
+  border-color: #778732;
+  box-shadow: 0 0 0 1px #778732;
+}
+.carousel-thumb-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 .carousel-indicators { display: flex; justify-content: center; gap: 8px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: #d9ded7; cursor: pointer; transition: background 0.2s; }
 .dot.active { background: #778732; }

@@ -361,9 +361,24 @@ watch(
           <div v-if="pledge.images && pledge.images.length > 0" class="card">
             <h3>Attached Photos</h3>
             <div class="photo-gallery">
-              <div v-for="img in pledge.images" :key="img.image_url" class="photo-item">
-                <img :src="img.image_url" alt="Donation material photo" />
-              </div>
+              <a
+                v-for="img in pledge.images"
+                :key="img.image_url || img"
+                :href="img.image_url || img"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="photo-item"
+                title="Open image in new tab"
+              >
+                <img :src="img.image_url || img" alt="Donation material photo" />
+                <span class="photo-overlay-icon" aria-hidden="true">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </span>
+              </a>
             </div>
           </div>
 
@@ -585,16 +600,47 @@ watch(
   gap: 12px;
 }
 .photo-item {
+  position: relative;
   aspect-ratio: 1;
   border-radius: 8px;
   overflow: hidden;
   border: 1px solid #eaeaea;
+  display: block;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.photo-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 .photo-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: transform 0.25s ease;
+}
+.photo-item:hover img {
+  transform: scale(1.05);
+}
+.photo-overlay-icon {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  border-radius: 6px;
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+.photo-item:hover .photo-overlay-icon {
+  opacity: 1;
 }
 
 /* --- Rating Card Styles --- */

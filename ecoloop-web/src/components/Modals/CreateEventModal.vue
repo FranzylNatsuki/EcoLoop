@@ -50,7 +50,14 @@ const categories = [
   'Gardening',
   'Crafts & DIY',
   'Upcycling',
-  'Tree Planting'
+  'Tree Planting',
+  'Eco-Construction',
+  'Community Rebuild',
+  'Demolition & Salvage',
+  'Carpentry & Timber',
+  'Masonry & Concrete',
+  'Roofing & Structural',
+  'Building Materials'
 ]
 
 const minDate = computed(() => {

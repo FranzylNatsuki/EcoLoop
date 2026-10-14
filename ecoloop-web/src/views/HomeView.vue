@@ -85,8 +85,8 @@ const feed = computed(() => {
         )
       }
 
-      const itemCat = (item.category || item.event_category || '').toLowerCase()
-      return itemCat === activeCategory
+      const itemCat = (item.category || item.event_category || '').toLowerCase().trim()
+      return itemCat === activeCategory || itemCat.includes(activeCategory) || activeCategory.includes(itemCat)
     })
   }
 

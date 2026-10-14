@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import PostActions from './PostActions.vue'
-import { MapPin, BadgeCheck } from 'lucide-vue-next'
+import { MapPin, BadgeCheck, ExternalLink } from 'lucide-vue-next'
 
 const props = defineProps<{
   post: any
@@ -76,14 +76,25 @@ const formattedDate = computed(() => {
 
       <!-- Render multiple images if they exist -->
       <div v-if="images && images.length > 0" class="image-gallery">
-        <img
+        <a
           v-for="(img, idx) in images"
           :key="idx"
-          :src="img.image_url"
-          :alt="post.title"
-          class="detail-image"
-          style="margin: 5px 10px 26px 0;"
-        />
+          :href="img.image_url"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="detail-image-link"
+          title="Open image in new tab"
+        >
+          <img
+            :src="img.image_url"
+            :alt="post.title"
+            class="detail-image"
+          />
+          <span class="image-open-hint" aria-hidden="true">
+            <ExternalLink :size="14" />
+            <span>Open in new tab</span>
+          </span>
+        </a>
       </div>
 
       <PostActions
@@ -232,12 +243,59 @@ const formattedDate = computed(() => {
   white-space: pre-line;
 }
 
+.detail-image-link {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  border-radius: 10px;
+  overflow: hidden;
+  text-decoration: none;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  margin: 5px 0 16px 0;
+}
+
+.detail-image-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+
 .detail-image {
   width: 100%;
   max-height: 420px;
   object-fit: cover;
   display: block;
   border-radius: 10px;
+  transition: transform 0.25s ease;
+}
+
+.detail-image-link:hover .detail-image {
+  transform: scale(1.02);
+}
+
+.image-open-hint {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(26, 29, 26, 0.75);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.detail-image-link:hover .image-open-hint {
+  opacity: 1;
+  transform: translateY(-2px);
 }
 
 .image-gallery {

@@ -59,7 +59,14 @@ const categories = [
   'Clean-Up Drive',
   'Recycling Workshop',
   'Upcycling Event',
-  'Tree Planting'
+  'Tree Planting',
+  'Eco-Construction',
+  'Community Rebuild',
+  'Demolition & Salvage',
+  'Carpentry & Timber',
+  'Masonry & Concrete',
+  'Roofing & Structural',
+  'Building Materials'
 ]
 
 function closeModal() {
