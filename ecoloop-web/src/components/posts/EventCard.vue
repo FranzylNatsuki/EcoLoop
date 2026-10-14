@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import type { EventItem } from '../../types/event'
 import { useRouter } from 'vue-router'
-import { BellRing, CheckCircle2 } from 'lucide-vue-next'
+import { BellRing, CheckCircle2, BadgeCheck } from 'lucide-vue-next'
 import { supabase } from '../../composables/useAuth'
 import { useEventFollowers } from '../../composables/useEventFollowers'
 import { useToast } from '../../composables/useToast'
@@ -99,6 +99,19 @@ const fundedPercentage = computed(() => {
 <template>
   <article class="event-card" @click="goToEvent">
     <div class="card-header">
+      <div v-if="event.organizer" class="organizer-meta">
+        <img :src="event.organizer.avatar || 'https://placehold.co/38x38'" :alt="event.organizer.name" class="organizer-avatar" />
+        <span class="organizer-name">{{ event.organizer.name }}</span>
+        <BadgeCheck
+          v-if="event.organizer.verified"
+          fill="#3B82F6"
+          color="white"
+          :size="15"
+          class="verified-badge"
+        />
+      </div>
+      <div v-else></div>
+
       <div class="badge-group">
         <span class="event-type-badge">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -224,6 +237,38 @@ const fundedPercentage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+
+.organizer-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.organizer-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.organizer-name {
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a1d1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.verified-badge {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .badge-group {

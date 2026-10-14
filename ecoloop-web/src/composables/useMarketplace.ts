@@ -5,6 +5,8 @@ import { supabase } from './useAuth'
       full_name: string
       Avatar: string
       score?: number
+      is_org?: boolean
+      is_verified?: boolean
     }
 
     export interface MarketplaceImage {
@@ -67,8 +69,11 @@ import { supabase } from './useAuth'
               ),
               author:profiles!author_id (
                 full_name,
+                is_org,
+                organization_id,
                 profile_data ( Avatar ),
-                user_ratings:user_ratings!user_ratings_ratee_id_fkey ( score )
+                user_ratings:user_ratings!user_ratings_ratee_id_fkey ( score ),
+                organizations!organization_id ( verification_status )
               )
             `)
             .eq('status', 'available')
@@ -78,10 +83,17 @@ import { supabase } from './useAuth'
           if (error) throw error
 
           listings.value = data.map((listing: any) => {
-            const rawRatings = listing.author?.user_ratings
+            const rawAuthor = Array.isArray(listing.author) ? listing.author[0] : listing.author
+            const rawRatings = rawAuthor?.user_ratings
             const userScore = Array.isArray(rawRatings)
               ? (rawRatings[0]?.score || 0)
               : (rawRatings?.score || 0)
+
+            let isVerified = false
+            if (rawAuthor?.is_org && rawAuthor?.organizations) {
+              const org = Array.isArray(rawAuthor.organizations) ? rawAuthor.organizations[0] : rawAuthor.organizations
+              if (org?.verification_status === 'verified') isVerified = true
+            }
 
             // Ensure images are sorted by their intended order
             const sortedImages = listing.images?.sort(
@@ -92,9 +104,11 @@ import { supabase } from './useAuth'
               ...listing,
               images: sortedImages,
               author: {
-                full_name: listing.author?.full_name || 'Anonymous User',
-                Avatar: listing.author?.profile_data?.Avatar || 'https://placehold.co/38x38',
-                score: userScore
+                full_name: rawAuthor?.full_name || 'Anonymous User',
+                Avatar: rawAuthor?.profile_data?.Avatar || 'https://placehold.co/38x38',
+                score: userScore,
+                is_org: Boolean(rawAuthor?.is_org),
+                is_verified: isVerified
               }
             }
           }) as MarketplaceListing[]

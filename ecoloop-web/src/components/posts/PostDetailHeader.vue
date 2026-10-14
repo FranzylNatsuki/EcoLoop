@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import PostActions from './PostActions.vue'
-import { MapPin } from 'lucide-vue-next'
+import { MapPin, BadgeCheck } from 'lucide-vue-next'
 
 const props = defineProps<{
   post: any
@@ -42,6 +42,13 @@ const formattedDate = computed(() => {
               <strong> {{ post.author.full_name }} </strong>
             </RouterLink>
           </span>
+          <BadgeCheck
+            v-if="post.author?.is_org && post.author?.is_verified"
+            fill="#3B82F6"
+            color="white"
+            :size="16"
+            class="verified-badge"
+          />
           <span>•</span>
           <!-- Updated: Use computed formattedDate -->
           <span>{{ formattedDate }}</span>
@@ -148,6 +155,12 @@ const formattedDate = computed(() => {
 
 .author-info strong {
   color: #1a1d1a;
+}
+
+.verified-badge {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .detail-avatar {

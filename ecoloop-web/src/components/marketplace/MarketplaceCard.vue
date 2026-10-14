@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { supabase } from '../../composables/useAuth'
 import type { MarketplaceListing } from '../../composables/useMarketplace'
+import { BadgeCheck } from 'lucide-vue-next'
 
 const props = withDefaults(defineProps<{
   listing?: MarketplaceListing
@@ -81,6 +82,24 @@ const getCategoryStyle = (category?: string) => {
 
 <template>
   <div :class="['listing-card', `variant-${variant}`]" role="link" tabindex="0" @click="openListing" @keydown.enter="openListing">
+    <!-- Header for feed variant -->
+    <div v-if="variant === 'feed'" class="feed-header">
+      <div class="feed-seller-meta">
+        <img :src="listingData?.author?.Avatar || 'https://placehold.co/38x38'" :alt="sellerName" class="seller-avatar-feed" />
+        <span class="seller-name-feed">{{ sellerName }}</span>
+        <BadgeCheck
+          v-if="listingData?.author?.is_org && listingData?.author?.is_verified"
+          fill="#3B82F6"
+          color="white"
+          :size="15"
+          class="verified-badge"
+        />
+        <span class="meta-dot">•</span>
+        <span class="listing-time">{{ listingData?.created_at ? new Date(listingData.created_at).toLocaleDateString() : 'Marketplace' }}</span>
+      </div>
+      <span class="marketplace-type-badge">MARKETPLACE</span>
+    </div>
+
     <div class="image-container">
       <img :src="coverImage" :alt="listingData?.title" class="product-photo" />
       <div
@@ -108,11 +127,19 @@ const getCategoryStyle = (category?: string) => {
       <div class="divider-line"></div>
       <div class="meta-row">
         <div class="meta-item">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2">
+          <img v-if="listingData?.author?.Avatar" :src="listingData.author.Avatar" :alt="sellerName" class="seller-avatar" />
+          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8F9A8F" stroke-width="2">
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
             <circle cx="12" cy="7" r="4"></circle>
           </svg>
           <span class="seller-name">{{ sellerName }}</span>
+          <BadgeCheck
+            v-if="listingData?.author?.is_org && listingData?.author?.is_verified"
+            fill="#3B82F6"
+            color="white"
+            :size="15"
+            class="verified-badge"
+          />
         </div>
       </div>
 
@@ -237,6 +264,63 @@ const getCategoryStyle = (category?: string) => {
   gap: 6px;
 }
 
+.feed-header {
+  padding: 16px 16px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #E4E7E3;
+}
+
+.feed-seller-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+  color: #525a52;
+}
+
+.seller-avatar-feed {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.seller-name-feed {
+  font-weight: 600;
+  color: #1a1d1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta-dot {
+  color: #8f9a8f;
+}
+
+.listing-time {
+  color: #8f9a8f;
+  font-size: 12px;
+}
+
+.marketplace-type-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  background: #778732;
+  color: #ffffff;
+  font-family: 'Outfit', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  border-radius: 20px;
+  flex-shrink: 0;
+}
+
 .meta-item {
   display: flex;
   align-items: center;
@@ -244,8 +328,23 @@ const getCategoryStyle = (category?: string) => {
   font-size: 13px;
 }
 
+.seller-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.verified-badge {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
 .seller-name {
   color: #525A52;
+  font-weight: 500;
 }
 
 .location {

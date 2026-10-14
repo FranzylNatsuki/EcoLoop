@@ -26,6 +26,7 @@ import ThankYouDonationModal from '../components/Modals/ThankYouDonationModal.vu
 import EditEventModal from '../components/Modals/EditEventModal.vue'
 
 import { supabase } from '../composables/useAuth'
+import { useUserLocation } from '../composables/useUserLocation'
 
 const route = useRoute()
 const router = useRouter()
@@ -48,23 +49,9 @@ const isEditModalOpen = ref(false)
 const donatePrefillName = ref('')
 
 // Grid View State
-const userLocation = ref<{ lat: number; lng: number } | null>(null)
+const { fetchUserLocation, getItemDistance } = useUserLocation()
 
 const activeCategory = computed(() => (route.query.category as string) || '')
-
-
-
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371
-  const dLat = (lat2 - lat1) * (Math.PI / 180)
-  const dLon = (lon2 - lon1) * (Math.PI / 180)
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return R * c
-}
 
 const filteredEvents = computed(() => {
   let result = events.value
@@ -84,17 +71,8 @@ const filteredEvents = computed(() => {
           return new Date((b as any).created_at || (b as any).schedule || 0).getTime() - new Date((a as any).created_at || (a as any).schedule || 0).getTime()
         case 'Hot':
           return getHotnessScore(b) - getHotnessScore(a)
-        case 'Nearest': {
-          if (!userLocation.value) return 0
-          const latA = (a as any).latitude ?? (a as any).lat
-          const lngA = (a as any).longitude ?? (a as any).lng ?? (a as any).lon
-          const latB = (b as any).latitude ?? (b as any).lat
-          const lngB = (b as any).longitude ?? (b as any).lng ?? (b as any).lon
-
-          const distA = (latA != null && lngA != null) ? calculateDistance(userLocation.value.lat, userLocation.value.lng, Number(latA), Number(lngA)) : Number((a as any).distance) || Infinity
-          const distB = (latB != null && lngB != null) ? calculateDistance(userLocation.value.lat, userLocation.value.lng, Number(latB), Number(lngB)) : Number((b as any).distance) || Infinity
-          return distA - distB
-        }
+        case 'Nearest':
+          return getItemDistance(a) - getItemDistance(b)
         default:
           return 0
       }
@@ -234,17 +212,7 @@ function openEventDetail(id: string) {
 
 onMounted(() => {
   loadPageData()
-
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        userLocation.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-      },
-      () => {
-        userLocation.value = { lat: 9.3068, lng: 123.3054 }
-      }
-    )
-  }
+  fetchUserLocation()
 })
 
 watch(

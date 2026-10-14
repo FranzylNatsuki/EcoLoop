@@ -8,6 +8,7 @@ import CategoryBar from '../components/layout/CategoryBar.vue'
 import { useMarketplace } from '../composables/useMarketplace'
 import type { MarketplaceListing } from '../composables/useMarketplace'
 import { useSort, getHotnessScore } from '../composables/useSort'
+import { useUserLocation } from '../composables/useUserLocation'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,43 +18,15 @@ const { selectedSort } = useSort()
 const selectedListing = ref<MarketplaceListing | null>(null)
 const isBuyRequestModalOpen = ref(false)
 
-// User Location State for the 'Nearest' filter
-const userLocation = ref<{ lat: number; lng: number } | null>(null)
+const { fetchUserLocation, getItemDistance } = useUserLocation()
 
 onMounted(() => {
   fetchListings()
-
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        userLocation.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-      },
-      (err) => {
-        console.warn('Geolocation denied or failed, using default location.', err)
-        userLocation.value = { lat: 9.3068, lng: 123.3054 }
-      }
-    )
-  } else {
-    userLocation.value = { lat: 9.3068, lng: 123.3054 }
-  }
+  fetchUserLocation()
 })
 
 
 const activeCategory = computed(() => (route.query.category as string) || '')
-
-
-
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180)
-  const dLon = (lon2 - lon1) * (Math.PI / 180)
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return R * c
-}
 
 const filteredListings = computed(() => {
   let result = listings.value
@@ -74,10 +47,7 @@ const filteredListings = computed(() => {
         case 'Hot':
           return getHotnessScore(b) - getHotnessScore(a)
         case 'Nearest':
-          if (!userLocation.value) return 0
-          const distA = (a.latitude && a.longitude) ? calculateDistance(userLocation.value.lat, userLocation.value.lng, a.latitude, a.longitude) : Infinity
-          const distB = (b.latitude && b.longitude) ? calculateDistance(userLocation.value.lat, userLocation.value.lng, b.latitude, b.longitude) : Infinity
-          return distA - distB
+          return getItemDistance(a) - getItemDistance(b)
         default: return 0
       }
     })

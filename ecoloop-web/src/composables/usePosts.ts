@@ -4,6 +4,9 @@ import { supabase } from './useAuth'
 export interface Author {
   full_name: string
   Avatar: string
+  score?: number
+  is_org?: boolean
+  is_verified?: boolean
 }
 
 export interface PostImage {
@@ -68,7 +71,10 @@ export function usePosts() {
           id, title, body, category, vote_count, comment_count, is_completed, created_at, author_id, latitude, longitude, location_address,
           author:profiles!author_id (
             full_name,
-            profile_data ( Avatar )
+            is_org,
+            organization_id,
+            profile_data ( Avatar ),
+            organizations!organization_id ( verification_status )
           ),
           post_images ( image_url, display_order )
         `)
@@ -91,14 +97,25 @@ export function usePosts() {
 
       if (error) throw error
 
-      posts.value = data.map((post: any) => ({
-        ...post,
-        is_completed: post.is_completed || false,
-        author: {
-          full_name: post.author?.full_name || 'Unknown User',
-          Avatar: post.author?.profile_data?.Avatar || 'https://placehold.co/38x38'
+      posts.value = data.map((post: any) => {
+        const rawAuthor = Array.isArray(post.author) ? post.author[0] : post.author
+        let isVerified = false
+        if (rawAuthor?.is_org && rawAuthor?.organizations) {
+          const org = Array.isArray(rawAuthor.organizations) ? rawAuthor.organizations[0] : rawAuthor.organizations
+          if (org?.verification_status === 'verified') isVerified = true
         }
-      })) as Post[]
+
+        return {
+          ...post,
+          is_completed: post.is_completed || false,
+          author: {
+            full_name: rawAuthor?.full_name || 'Unknown User',
+            Avatar: rawAuthor?.profile_data?.Avatar || 'https://placehold.co/38x38',
+            is_org: Boolean(rawAuthor?.is_org),
+            is_verified: isVerified
+          }
+        }
+      }) as Post[]
     } catch (err) {
       console.error('Error fetching posts from Supabase:', err)
     }

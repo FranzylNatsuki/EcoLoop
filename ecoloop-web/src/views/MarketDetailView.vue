@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, nextTick } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { Share2, ChevronLeft, ChevronRight, MapPin } from 'lucide-vue-next'
+import { Share2, ChevronLeft, ChevronRight, MapPin, BadgeCheck } from 'lucide-vue-next'
 import { supabase } from '../composables/useAuth'
 import { useToast } from '../composables/useToast'
 import PageLayout from '../components/layout/PageLayout.vue'
@@ -55,6 +55,19 @@ const post = ref<any>(null)
 const commentsData = ref<any[]>([])
 const purchaseRequests = ref<PurchaseRequest[]>([])
 const selectedRequest = ref<PurchaseRequest | null>(null)
+const currentUser = ref<{ id: string } | null>(null)
+const authLoading = ref(true)
+const error = ref<string | null>(null)
+
+const isOwner = computed(() => {
+  const ownerId = post.value?.author_id || post.value?.user_id || post.value?.seller_id
+  return Boolean(currentUser.value?.id && ownerId && currentUser.value.id === ownerId)
+})
+
+const myPurchaseRequest = computed(() => {
+  if (isOwner.value || !currentUser.value) return null
+  return purchaseRequests.value.find(r => r.buyer_id === currentUser.value?.id) || null
+})
 const showRequestModal = ref(false)
 const selectedMaterial = ref('')
 const requestedQuantity = ref(1)
@@ -76,10 +89,11 @@ const hoverRating = ref<number>(0)
 const isSubmittingRating = ref(false)
 
 function parseRequestNotes(notes?: string | null) {
-  if (!notes) return { preference: 'pickup', location: '', message: '' }
+  if (!notes) return { preference: 'pickup', location: '', coordinates: null as { lat: number; lng: number } | null, message: '' }
   
   let preference = 'pickup'
   let location = ''
+  let coordinates: { lat: number; lng: number } | null = null
   let message = ''
 
   const prefMatch = notes.match(/Preference:\s*([^\n]+)/i)
@@ -95,6 +109,15 @@ function parseRequestNotes(notes?: string | null) {
     location = locMatch[1].trim()
   }
 
+  const coordMatch = notes.match(/Coordinates:\s*([-\d.]+)\s*,\s*([-\d.]+)/i)
+  if (coordMatch) {
+    const lat = parseFloat(coordMatch[1])
+    const lng = parseFloat(coordMatch[2])
+    if (!isNaN(lat) && !isNaN(lng)) {
+      coordinates = { lat, lng }
+    }
+  }
+
   const msgMatch = notes.match(/(?:Buyer Notes|Message|Notes):\s*([\s\S]+)/i)
   if (msgMatch) {
     message = msgMatch[1].trim()
@@ -102,7 +125,7 @@ function parseRequestNotes(notes?: string | null) {
     message = notes
   }
 
-  return { preference, location, message }
+  return { preference, location, coordinates, message }
 }
 
 function getPreferenceLabel(pref: string) {
@@ -115,6 +138,49 @@ function getPreferenceLabel(pref: string) {
 const mapContainer = ref<HTMLElement | null>(null)
 let requestMapInstance: L.Map | null = null
 
+const currentUserProfile = ref<any>(null)
+const buyerMapContainer = ref<HTMLElement | null>(null)
+let buyerMapInstance: L.Map | null = null
+
+const selectedRequestLogistics = computed(() => {
+  if (!selectedRequest.value) return null
+  const parsed = parseRequestNotes(selectedRequest.value.notes)
+  
+  let lat: number | null = null
+  let lng: number | null = null
+  let addressText = parsed.location
+  let label = 'Location'
+
+  if (parsed.preference === 'deliver') {
+    // Deliver: Buyer's address and Buyer's coordinates
+    label = "Buyer's Delivery Address"
+    lat = parsed.coordinates?.lat ?? (selectedRequest.value.buyer?.latitude != null ? Number(selectedRequest.value.buyer.latitude) : null)
+    lng = parsed.coordinates?.lng ?? (selectedRequest.value.buyer?.longitude != null ? Number(selectedRequest.value.buyer.longitude) : null)
+    addressText = parsed.location || selectedRequest.value.buyer?.address || 'Buyer Address'
+  } else if (parsed.preference === 'pickup') {
+    // Pickup: Seller's address and Seller's coordinates
+    label = "Seller's Pickup Location"
+    lat = post.value?.latitude != null ? Number(post.value.latitude) : null
+    lng = post.value?.longitude != null ? Number(post.value.longitude) : null
+    addressText = post.value?.location_address || 'Seller Location'
+  } else {
+    // Community: Meeting spot
+    label = "Community Meetup Location"
+    lat = parsed.coordinates?.lat ?? (post.value?.latitude != null ? Number(post.value.latitude) : null)
+    lng = parsed.coordinates?.lng ?? (post.value?.longitude != null ? Number(post.value.longitude) : null)
+    addressText = parsed.location || 'Community Center'
+  }
+
+  return {
+    preference: parsed.preference,
+    addressText,
+    label,
+    lat,
+    lng,
+    hasCoords: lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)
+  }
+})
+
 watch(selectedRequest, async (newReq) => {
   if (!newReq) {
     if (requestMapInstance) {
@@ -124,35 +190,110 @@ watch(selectedRequest, async (newReq) => {
     return
   }
   
-  if (newReq.buyer && newReq.buyer.latitude && newReq.buyer.longitude) {
-    await nextTick()
+  await nextTick()
+  const logistics = selectedRequestLogistics.value
+  if (logistics && logistics.hasCoords) {
     setTimeout(() => {
       if (!mapContainer.value) return
       if (requestMapInstance) {
         requestMapInstance.remove()
       }
-      const lat = newReq.buyer?.latitude as number
-      const lng = newReq.buyer?.longitude as number
-      requestMapInstance = L.map(mapContainer.value).setView([lat, lng], 14)
+      const lat = Number(logistics.lat)
+      const lng = Number(logistics.lng)
+      requestMapInstance = L.map(mapContainer.value).setView([lat, lng], 15)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap'
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19
       }).addTo(requestMapInstance)
-      L.marker([lat, lng]).addTo(requestMapInstance)
+      L.marker([lat, lng])
+        .addTo(requestMapInstance)
+        .bindPopup(`<b>${logistics.label}</b><br>${logistics.addressText}`)
+        .openPopup()
+
+      setTimeout(() => {
+        if (requestMapInstance) requestMapInstance.invalidateSize()
+      }, 200)
     }, 100)
   }
 })
-const error = ref<string | null>(null)
-const currentUser = ref<{ id: string } | null>(null)
-const authLoading = ref(true)
 
-const isOwner = computed(() => {
-  const ownerId = post.value?.author_id || post.value?.user_id || post.value?.seller_id
-  return Boolean(currentUser.value?.id && ownerId && currentUser.value.id === ownerId)
+const myRequestLogistics = computed(() => {
+  if (!myPurchaseRequest.value) return null
+  const parsed = parseRequestNotes(myPurchaseRequest.value.notes)
+  
+  let lat: number | null = null
+  let lng: number | null = null
+  let addressText = parsed.location
+  let label = 'Location'
+
+  if (parsed.preference === 'deliver') {
+    label = "Your Delivery Address"
+    lat = parsed.coordinates?.lat ?? (currentUserProfile.value?.latitude != null ? Number(currentUserProfile.value.latitude) : null)
+    lng = parsed.coordinates?.lng ?? (currentUserProfile.value?.longitude != null ? Number(currentUserProfile.value.longitude) : null)
+    addressText = parsed.location || currentUserProfile.value?.address || 'Your Delivery Address'
+  } else if (parsed.preference === 'pickup') {
+    label = "Pickup Location"
+    lat = post.value?.latitude != null ? Number(post.value.latitude) : null
+    lng = post.value?.longitude != null ? Number(post.value.longitude) : null
+    addressText = post.value?.location_address || 'Seller Location'
+  } else {
+    label = "Community Meetup Location"
+    lat = parsed.coordinates?.lat ?? (post.value?.latitude != null ? Number(post.value.latitude) : null)
+    lng = parsed.coordinates?.lng ?? (post.value?.longitude != null ? Number(post.value.longitude) : null)
+    addressText = parsed.location || 'Community Center'
+  }
+
+  return {
+    preference: parsed.preference,
+    addressText,
+    label,
+    lat,
+    lng,
+    hasCoords: lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)
+  }
 })
 
-const myPurchaseRequest = computed(() => {
-  if (isOwner.value || !currentUser.value) return null
-  return purchaseRequests.value.find(r => r.buyer_id === currentUser.value?.id) || null
+watch(myRequestLogistics, async (logistics) => {
+  if (!logistics?.hasCoords) {
+    if (buyerMapInstance) {
+      buyerMapInstance.remove()
+      buyerMapInstance = null
+    }
+    return
+  }
+  await nextTick()
+  setTimeout(() => {
+    if (!buyerMapContainer.value) return
+    if (buyerMapInstance) {
+      buyerMapInstance.remove()
+    }
+    const lat = Number(logistics.lat)
+    const lng = Number(logistics.lng)
+    buyerMapInstance = L.map(buyerMapContainer.value).setView([lat, lng], 15)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap',
+      maxZoom: 19
+    }).addTo(buyerMapInstance)
+    L.marker([lat, lng])
+      .addTo(buyerMapInstance)
+      .bindPopup(`<b>${logistics.label}</b><br>${logistics.addressText}`)
+      .openPopup()
+
+    setTimeout(() => {
+      if (buyerMapInstance) buyerMapInstance.invalidateSize()
+    }, 200)
+  }, 150)
+}, { immediate: true })
+
+onUnmounted(() => {
+  if (requestMapInstance) {
+    requestMapInstance.remove()
+    requestMapInstance = null
+  }
+  if (buyerMapInstance) {
+    buyerMapInstance.remove()
+    buyerMapInstance = null
+  }
 })
 
 const rateeUser = computed(() => {
@@ -257,8 +398,11 @@ async function fetchPostDetails() {
       ),
       author:profiles!author_id (
         full_name,
+        is_org,
+        organization_id,
         created_at,
-        profile_data ( Avatar, about, "Posts", "CommunityScore" )
+        profile_data ( Avatar, about, "Posts", "CommunityScore" ),
+        organizations!organization_id ( verification_status )
       )
     `)
     .eq('id', postId)
@@ -276,6 +420,12 @@ async function fetchPostDetails() {
 
   const authorRecord = getAuthorRecord(data.author)
   const profileRecord = getProfileRecord(authorRecord?.profile_data)
+
+  let isVerified = false
+  if (authorRecord?.is_org && authorRecord?.organizations) {
+    const org = Array.isArray(authorRecord.organizations) ? authorRecord.organizations[0] : authorRecord.organizations
+    if (org?.verification_status === 'verified') isVerified = true
+  }
 
   // Fetch author rating average from user_ratings
   let avgAuthorRating = 0
@@ -304,7 +454,9 @@ async function fetchPostDetails() {
       Avatar: profileRecord?.Avatar || 'https://placehold.co/38x38',
       about: profileRecord?.about || 'No bio available.',
       rating: authorRating.value,
-      ratingCount: authorRatingNum.value
+      ratingCount: authorRatingNum.value,
+      is_org: Boolean(authorRecord?.is_org),
+      is_verified: isVerified
     }
   }
 }
@@ -493,6 +645,14 @@ async function loadPage() {
   try {
     const { data: { session } } = await supabase.auth.getSession()
     currentUser.value = session?.user ? { id: session.user.id } : null
+    if (session?.user) {
+      const { data: p } = await supabase
+        .from('profiles')
+        .select('id, full_name, address, latitude, longitude')
+        .eq('id', session.user.id)
+        .maybeSingle()
+      currentUserProfile.value = p
+    }
     await fetchPostDetails()
 
     if (post.value) {
@@ -712,7 +872,9 @@ const authorProfile = computed(() => {
     ratingCount: authorRatingNum.value,
     joinedYear: post.value.author.created_at
       ? new Date(post.value.author.created_at).getFullYear().toString()
-      : 'Unknown'
+      : 'Unknown',
+    is_org: post.value.author.is_org,
+    is_verified: post.value.author.is_verified
   }
 })
 
@@ -771,6 +933,13 @@ async function handleShare() {
             <h1>{{ post.title }}</h1>
             <p class="listing-meta">
               Posted by {{ post.author?.full_name || 'Unknown User' }}
+              <BadgeCheck
+                v-if="post.author?.is_org && post.author?.is_verified"
+                fill="#3B82F6"
+                color="white"
+                :size="16"
+                class="verified-badge"
+              />
               · {{ new Date(post.created_at).toLocaleDateString() }}
               
               <template v-if="post.location_address">
@@ -903,14 +1072,14 @@ async function handleShare() {
         <div class="logistics-card-inner">
           <div class="logistics-row">
             <span class="logistics-label">Handover Preference:</span>
-            <span class="preference-badge" :class="parseRequestNotes(myPurchaseRequest.notes).preference">
-              {{ getPreferenceLabel(parseRequestNotes(myPurchaseRequest.notes).preference) }}
+            <span class="preference-badge" :class="myRequestLogistics?.preference || 'pickup'">
+              {{ getPreferenceLabel(myRequestLogistics?.preference || 'pickup') }}
             </span>
           </div>
 
           <div class="logistics-row">
-            <span class="logistics-label">Location Details:</span>
-            <span class="location-val">📍 {{ parseRequestNotes(myPurchaseRequest.notes).location || post.location_address || 'Coordinate with seller' }}</span>
+            <span class="logistics-label">{{ myRequestLogistics?.label || 'Location Details' }}:</span>
+            <span class="location-val">📍 {{ myRequestLogistics?.addressText || 'Coordinate with seller' }}</span>
           </div>
 
           <div class="logistics-row">
@@ -922,6 +1091,9 @@ async function handleShare() {
             <span class="logistics-label">Your Note:</span>
             <p class="buyer-note-quote">"{{ parseRequestNotes(myPurchaseRequest.notes).message }}"</p>
           </div>
+
+          <!-- Buyer's Map Preview -->
+          <div v-if="myRequestLogistics?.hasCoords" ref="buyerMapContainer" class="buyer-status-map"></div>
         </div>
       </section>
 
@@ -1033,17 +1205,17 @@ async function handleShare() {
             <h4>Handover & Location Details</h4>
             <div class="modal-logistics-row">
               <span class="logistics-label">Preference:</span>
-              <span class="preference-badge" :class="parseRequestNotes(selectedRequest.notes).preference">
-                {{ getPreferenceLabel(parseRequestNotes(selectedRequest.notes).preference) }}
+              <span class="preference-badge" :class="selectedRequestLogistics?.preference || 'pickup'">
+                {{ getPreferenceLabel(selectedRequestLogistics?.preference || 'pickup') }}
               </span>
             </div>
-            <div class="modal-logistics-row location-row-wrap" v-if="parseRequestNotes(selectedRequest.notes).location || selectedRequest.buyer?.address || post?.location_address">
-              <span class="logistics-label">Location:</span>
+            <div class="modal-logistics-row location-row-wrap" v-if="selectedRequestLogistics?.addressText">
+              <span class="logistics-label">{{ selectedRequestLogistics.label }}:</span>
               <span class="address-text">
-                📍 {{ parseRequestNotes(selectedRequest.notes).location || selectedRequest.buyer?.address || post?.location_address }}
+                📍 {{ selectedRequestLogistics.addressText }}
               </span>
             </div>
-            <div v-if="selectedRequest.buyer?.latitude && selectedRequest.buyer?.longitude" ref="mapContainer" class="modal-map"></div>
+            <div v-if="selectedRequestLogistics?.hasCoords" ref="mapContainer" class="modal-map"></div>
           </div>
 
           <!-- Contact Info -->
@@ -1129,6 +1301,8 @@ async function handleShare() {
 .category-label { color: #778732; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 h1 { margin: 8px 0; color: #1a1d1a; }
 .listing-meta, .muted-text { color: #8f9a8f; font-size: 13px; }
+.listing-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.verified-badge { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 .location-text { display: inline-flex; align-items: center; gap: 4px; }
 .location-icon { margin-bottom: 2px; }
 .action-buttons { display: flex; align-items: center; gap: 8px; }
@@ -1314,6 +1488,15 @@ h1 { margin: 8px 0; color: #1a1d1a; }
   margin: 0;
   font-style: italic;
   color: #475569;
+}
+
+.buyer-status-map {
+  width: 100%;
+  height: 180px;
+  border-radius: 8px;
+  background: #eaebec;
+  border: 1px solid #d9ded7;
+  margin-top: 10px;
 }
 
 /* Modal logistics row */

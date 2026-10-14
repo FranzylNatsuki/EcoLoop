@@ -16,6 +16,7 @@ import { useEvents } from '../composables/useEvents'
 import { useSearch } from '../composables/useSearch'
 import { supabase } from '../composables/useAuth'
 import { useMarketplace } from '../composables/useMarketplace'
+import { useUserLocation } from '../composables/useUserLocation'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,49 +29,13 @@ const searchedUsers = ref<any[]>([])
 const selectedListing = ref<any>(null)
 const isBuyRequestModalOpen = ref(false)
 
-// User Location State for the 'Nearest' filter
-const userLocation = ref<{ lat: number; lng: number } | null>(null)
-
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371
-  const dLat = (lat2 - lat1) * (Math.PI / 180)
-  const dLon = (lon2 - lon1) * (Math.PI / 180)
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-  return R * c
-}
-
-function getItemDistance(item: any): number {
-  if (!userLocation.value) return Number(item.distance) || Infinity
-  const lat = item.latitude ?? item.lat
-  const lng = item.longitude ?? item.lng ?? item.lon
-  if (lat != null && lng != null && !isNaN(Number(lat)) && !isNaN(Number(lng))) {
-    return calculateDistance(userLocation.value.lat, userLocation.value.lng, Number(lat), Number(lng))
-  }
-  return Number(item.distance) || Infinity
-}
+const { fetchUserLocation, getItemDistance } = useUserLocation()
 
 onMounted(() => {
   fetchPosts()
   fetchEvents()
   fetchListings()
-
-  if ('geolocation' in navigator) {
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        userLocation.value = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-      },
-      (err) => {
-        console.warn('Geolocation denied or failed, using default location.', err)
-        userLocation.value = { lat: 9.3068, lng: 123.3054 }
-      }
-    )
-  } else {
-    userLocation.value = { lat: 9.3068, lng: 123.3054 }
-  }
+  fetchUserLocation()
 })
 
 onMounted(() => window.addEventListener('purchase-request-submitted', refreshMarketplaceRequests))

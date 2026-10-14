@@ -12,6 +12,7 @@ import BackButton from '../components/common/BackButton.vue'
 import DonationCard from '../components/posts/DonationCard.vue'
 import { BadgeCheck } from 'lucide-vue-next'
 import VerificationModal from '../components/Modals/VerificationModal.vue'
+import { setUserLocation } from '../composables/useUserLocation'
 
 const router = useRouter()
 
@@ -249,6 +250,9 @@ onMounted(async () => {
     if (data) {
       console.log("Success! Profile Data:", data)
       profileData.value = data
+      if (data.latitude != null && data.longitude != null) {
+        setUserLocation(Number(data.latitude), Number(data.longitude))
+      }
     }
   } else {
     console.warn("No session found at all.")
@@ -294,6 +298,7 @@ const handleSaveProfile = async (updatedData: any) => {
     .update({
       full_name: updatedData.fullName,
       location: updatedData.location,
+      address: updatedData.location,
       contact_number: updatedData.contact,
       latitude: updatedData.latitude,
       longitude: updatedData.longitude
@@ -316,7 +321,14 @@ const handleSaveProfile = async (updatedData: any) => {
   if (!profileError && !dataError && profileData.value) {
     profileData.value.full_name = updatedData.fullName
     profileData.value.location = updatedData.location
+    profileData.value.address = updatedData.location
     profileData.value.contact_number = updatedData.contact
+    profileData.value.latitude = updatedData.latitude
+    profileData.value.longitude = updatedData.longitude
+
+    if (updatedData.latitude != null && updatedData.longitude != null) {
+      setUserLocation(Number(updatedData.latitude), Number(updatedData.longitude))
+    }
 
     // Safety check: Create the nested object if it doesn't exist yet!
     if (!profileData.value.profile_data) {

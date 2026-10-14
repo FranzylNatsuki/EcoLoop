@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
+import { BadgeCheck } from 'lucide-vue-next'
 
 export interface AuthorProfile {
   id: string
@@ -11,6 +12,8 @@ export interface AuthorProfile {
   rating?: number
   ratingCount?: number
   joinedYear?: string
+  is_org?: boolean
+  is_verified?: boolean
 }
 
 defineProps<{ author: AuthorProfile }>()
@@ -23,8 +26,15 @@ defineProps<{ author: AuthorProfile }>()
     <RouterLink :to="`/user/${author.id}`" class="profile-link" style="text-decoration: none;">
         <div class="author-profile">
         <img :src="author.avatar" :alt="author.name" class="avatar" />
-        <div>
+        <div class="name-badge-row">
             <strong>{{ author.name }}</strong>
+            <BadgeCheck
+              v-if="author.is_verified"
+              fill="#3B82F6"
+              color="white"
+              :size="16"
+              class="verified-badge"
+            />
         </div>
         </div>
 
@@ -56,7 +66,9 @@ defineProps<{ author: AuthorProfile }>()
 .sidebar-card h2 { margin: 0 0 14px; font-family: 'Outfit', sans-serif; font-size: 16px; color: #1a1d1a; }
 .author-profile { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .avatar { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+.name-badge-row { display: flex; align-items: center; gap: 6px; }
 .author-profile strong { color: #1a1d1a; font-size: 15px; }
+.verified-badge { display: inline-block; vertical-align: middle; flex-shrink: 0; }
 
 .author-bio { margin: 0 0 16px; font-size: 13px; color: #525a52; line-height: 1.5; }
 .empty-bio { color: #8f9a8f; font-style: italic; }

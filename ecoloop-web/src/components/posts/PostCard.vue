@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 // import VotePanel from './VotePanel.vue'
 import PostActions from './PostActions.vue'
 import { supabase } from '../../composables/useAuth'
-import { MapPin } from 'lucide-vue-next'
+import { MapPin, BadgeCheck } from 'lucide-vue-next'
 
 interface PostImage {
   image_url: string
@@ -26,7 +26,9 @@ interface Post {
   author: {
     id?: string;
     full_name: string;
-    Avatar: string
+    Avatar: string;
+    is_org?: boolean;
+    is_verified?: boolean;
   }
 }
 
@@ -76,6 +78,13 @@ function openPost() {
       <div class="post-meta">
         <img :src="post.author.Avatar" :alt="post.author.full_name" class="avatar" />
         <span class="author-name">{{ post.author.full_name }}</span>
+        <BadgeCheck
+          v-if="post.author?.is_org && post.author?.is_verified"
+          fill="#3B82F6"
+          color="white"
+          :size="15"
+          class="verified-badge"
+        />
         <span class="meta-dot">•</span>
         <span class="time-ago">{{ new Date(post.created_at).toLocaleDateString() }}</span>
 
@@ -176,6 +185,12 @@ function openPost() {
 .author-name {
   font-weight: 600;
   color: #1a1d1a;
+}
+
+.verified-badge {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 .meta-dot {

@@ -3,6 +3,19 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { Check, Package, X } from 'lucide-vue-next'
 import { supabase } from '../../composables/useAuth'
 import { useToast } from '../../composables/useToast'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+
+// Vite Leaflet Icon Fix
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconUrl: markerIcon,
+  iconRetinaUrl: markerIcon2x,
+  shadowUrl: markerShadow
+})
 
 interface MaterialOption {
   name?: string
@@ -32,6 +45,13 @@ const messageText = ref('')
 const pickupPreference = ref<'pickup' | 'community' | 'deliver'>('pickup')
 const deliveryAddress = ref('')
 const comCenterLocation = ref('')
+const meetupLat = ref<number | null>(null)
+const meetupLng = ref<number | null>(null)
+const deliveryLat = ref<number | null>(null)
+const deliveryLng = ref<number | null>(null)
+const handoverMapContainer = ref<HTMLElement | null>(null)
+let handoverMapInstance: L.Map | null = null
+let handoverMarkerInstance: L.Marker | null = null
 const isSubmitting = ref(false)
 const { addToast } = useToast()
 
@@ -64,22 +84,129 @@ const maxQuantity = computed(() => {
   return qty ? Number(qty) : (props.post?.quantity ? Number(props.post.quantity) : 1)
 })
 
+function updateHandoverMap() {
+  if (!handoverMapContainer.value) return
+
+  const defaultLat = 9.3068
+  const defaultLng = 123.3054
+
+  let targetLat: number
+  let targetLng: number
+  let popupText = ''
+  let isDraggable = false
+
+  if (pickupPreference.value === 'pickup') {
+    // Pickup: Poster's Map
+    targetLat = props.post?.latitude != null ? Number(props.post.latitude) : defaultLat
+    targetLng = props.post?.longitude != null ? Number(props.post.longitude) : defaultLng
+    popupText = `<b>Poster's Pickup Location</b><br>${props.post?.location_address || 'Seller location'}`
+    isDraggable = false
+  } else if (pickupPreference.value === 'community') {
+    // Meetup: Meetup Map
+    targetLat = meetupLat.value ?? (props.post?.latitude != null ? Number(props.post.latitude) : defaultLat)
+    targetLng = meetupLng.value ?? (props.post?.longitude != null ? Number(props.post.longitude) : defaultLng)
+    popupText = `<b>Meetup Location</b><br>${comCenterLocation.value || 'Click map or drag pin to set meetup spot'}`
+    isDraggable = true
+    if (meetupLat.value === null) meetupLat.value = targetLat
+    if (meetupLng.value === null) meetupLng.value = targetLng
+  } else {
+    // Deliver: Same Map Input
+    targetLat = deliveryLat.value ?? defaultLat
+    targetLng = deliveryLng.value ?? defaultLng
+    popupText = `<b>Buyer's Delivery Location</b><br>${deliveryAddress.value || 'Click map or drag pin to set delivery spot'}`
+    isDraggable = true
+    if (deliveryLat.value === null) deliveryLat.value = targetLat
+    if (deliveryLng.value === null) deliveryLng.value = targetLng
+  }
+
+  if (!handoverMapInstance) {
+    handoverMapInstance = L.map(handoverMapContainer.value).setView([targetLat, targetLng], 14)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap',
+      maxZoom: 19
+    }).addTo(handoverMapInstance)
+
+    handoverMarkerInstance = L.marker([targetLat, targetLng], { draggable: isDraggable })
+      .addTo(handoverMapInstance)
+      .bindPopup(popupText)
+      .openPopup()
+
+    const handleCoordChange = (lat: number, lng: number) => {
+      if (pickupPreference.value === 'pickup') return
+      if (pickupPreference.value === 'community') {
+        meetupLat.value = lat
+        meetupLng.value = lng
+      } else if (pickupPreference.value === 'deliver') {
+        deliveryLat.value = lat
+        deliveryLng.value = lng
+      }
+      if (handoverMarkerInstance) {
+        handoverMarkerInstance.setLatLng([lat, lng])
+        handoverMarkerInstance.openPopup()
+      }
+    }
+
+    handoverMarkerInstance.on('dragend', (e: any) => {
+      const latlng = e.target.getLatLng()
+      handleCoordChange(latlng.lat, latlng.lng)
+    })
+
+    handoverMapInstance.on('click', (e: L.LeafletMouseEvent) => {
+      handleCoordChange(e.latlng.lat, e.latlng.lng)
+    })
+  } else {
+    handoverMapInstance.setView([targetLat, targetLng], 14)
+    if (handoverMarkerInstance) {
+      handoverMarkerInstance.setLatLng([targetLat, targetLng])
+      if (handoverMarkerInstance.dragging) {
+        if (isDraggable) {
+          handoverMarkerInstance.dragging.enable()
+        } else {
+          handoverMarkerInstance.dragging.disable()
+        }
+      }
+      handoverMarkerInstance.bindPopup(popupText).openPopup()
+    }
+  }
+
+  setTimeout(() => {
+    if (handoverMapInstance) handoverMapInstance.invalidateSize()
+  }, 150)
+}
+
+watch(pickupPreference, async () => {
+  await nextTick()
+  updateHandoverMap()
+})
+
 watch(() => props.modelValue, async (open) => {
   if (open) {
     selectedMaterial.value = materialName(availableMaterials.value[0])
     requestedQuantity.value = 1
 
-    // Prefill user delivery address from profile if available
+    // Prefill meetup default from post coords if available
+    if (props.post?.latitude && props.post?.longitude) {
+      meetupLat.value = Number(props.post.latitude)
+      meetupLng.value = Number(props.post.longitude)
+    }
+
+    // Prefill buyer delivery address and coordinates from profile if available
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('address')
+          .select('address, latitude, longitude')
           .eq('id', session.user.id)
           .maybeSingle()
-        if (profile?.address && !deliveryAddress.value) {
-          deliveryAddress.value = profile.address
+        if (profile) {
+          if (profile.address && !deliveryAddress.value) {
+            deliveryAddress.value = profile.address
+          }
+          if (profile.latitude && profile.longitude) {
+            deliveryLat.value = Number(profile.latitude)
+            deliveryLng.value = Number(profile.longitude)
+          }
         }
       }
     } catch (e) {
@@ -94,7 +221,13 @@ watch(() => props.modelValue, async (open) => {
 
     await nextTick()
     if (dialogRef.value && !dialogRef.value.open) dialogRef.value.showModal()
+    setTimeout(updateHandoverMap, 150)
   } else if (dialogRef.value?.open) {
+    if (handoverMapInstance) {
+      handoverMapInstance.remove()
+      handoverMapInstance = null
+      handoverMarkerInstance = null
+    }
     dialogRef.value.close()
   }
 }, { immediate: true })
@@ -140,15 +273,32 @@ async function submit() {
 
     const currentUserId = session.user.id
 
-    const chosenLocation = pickupPreference.value === 'deliver'
-      ? (deliveryAddress.value.trim() || 'Buyer delivery address')
-      : pickupPreference.value === 'community'
-      ? (comCenterLocation.value.trim() || 'Community Center')
-      : (props.post?.location_address || 'Seller location')
+    let chosenLocation = ''
+    let chosenLat: number | null = null
+    let chosenLng: number | null = null
 
-    let finalNotes = `Preference: ${pickupPreference.value}\nLocation: ${chosenLocation}`;
+    if (pickupPreference.value === 'pickup') {
+      chosenLocation = props.post?.location_address || 'Seller pickup location'
+      chosenLat = props.post?.latitude != null ? Number(props.post.latitude) : null
+      chosenLng = props.post?.longitude != null ? Number(props.post.longitude) : null
+    } else if (pickupPreference.value === 'community') {
+      chosenLocation = comCenterLocation.value.trim() || 'Community Center'
+      chosenLat = meetupLat.value
+      chosenLng = meetupLng.value
+    } else {
+      chosenLocation = deliveryAddress.value.trim() || 'Buyer delivery address'
+      chosenLat = deliveryLat.value
+      chosenLng = deliveryLng.value
+    }
+
+    let finalNotes = `Preference: ${pickupPreference.value}\nLocation: ${chosenLocation}`
+
+    if (chosenLat != null && chosenLng != null && !isNaN(chosenLat) && !isNaN(chosenLng)) {
+      finalNotes += `\nCoordinates: ${chosenLat},${chosenLng}`
+    }
+
     if (messageText.value.trim()) {
-      finalNotes += `\nBuyer Notes: ${messageText.value.trim()}`;
+      finalNotes += `\nBuyer Notes: ${messageText.value.trim()}`
     }
 
     const payload = {
@@ -236,13 +386,21 @@ function blockInvalidNumberChars(e: KeyboardEvent) {
 
           <!-- Dynamic Location Details based on Selected Preference -->
           <div class="location-preference-box">
+            <!-- 1. Pickup: Poster's Map -->
             <div v-if="pickupPreference === 'pickup'" class="info-location-note">
               <span class="loc-label">Pickup Location:</span>
-              <p class="loc-val">📍 {{ post?.location_address || 'Seller pickup location (coordinate with seller upon acceptance)' }}</p>
+              <p class="loc-val">📍 {{ post?.location_address || 'Seller pickup location' }}</p>
+              <div class="map-section-header">
+                <span class="map-hint-text">Poster's Map (Item pickup point):</span>
+                <span v-if="post?.latitude && post?.longitude" class="coords-pill">
+                  📍 {{ Number(post.latitude).toFixed(4) }}, {{ Number(post.longitude).toFixed(4) }}
+                </span>
+              </div>
             </div>
 
+            <!-- 2. Meetup: Meetup Map -->
             <div v-else-if="pickupPreference === 'community'" class="input-location-row">
-              <label class="field-sublabel">Community Center / Meeting Place:</label>
+              <label class="field-sublabel">Meetup Place / Community Center:</label>
               <input
                 v-model="comCenterLocation"
                 type="text"
@@ -250,8 +408,15 @@ function blockInvalidNumberChars(e: KeyboardEvent) {
                 placeholder="e.g. Barangay Hall / Central Community Center"
                 required
               />
+              <div class="map-section-header">
+                <span class="map-hint-text">Meetup Map (Click or drag pin to set meetup spot):</span>
+                <span v-if="meetupLat && meetupLng" class="coords-pill">
+                  📍 {{ meetupLat.toFixed(4) }}, {{ meetupLng.toFixed(4) }}
+                </span>
+              </div>
             </div>
 
+            <!-- 3. Deliver to me: Same Map Input -->
             <div v-else-if="pickupPreference === 'deliver'" class="input-location-row">
               <label class="field-sublabel">Delivery Address:</label>
               <input
@@ -261,7 +426,16 @@ function blockInvalidNumberChars(e: KeyboardEvent) {
                 placeholder="Enter complete delivery street address, city"
                 required
               />
+              <div class="map-section-header">
+                <span class="map-hint-text">Delivery Map (Click or drag pin to confirm drop-off location):</span>
+                <span v-if="deliveryLat && deliveryLng" class="coords-pill">
+                  📍 {{ deliveryLat.toFixed(4) }}, {{ deliveryLng.toFixed(4) }}
+                </span>
+              </div>
             </div>
+
+            <!-- Shared Handover Map for all 3 choices -->
+            <div ref="handoverMapContainer" class="handover-map-preview"></div>
           </div>
         </div>
 
@@ -303,9 +477,9 @@ function blockInvalidNumberChars(e: KeyboardEvent) {
 </template>
 
 <style scoped>
-.modal-backdrop { border: none; padding: 0; background: transparent; max-width: 100vw; max-height: 100vh; }
+.modal-backdrop { border: none; padding: 24px 0; background: transparent; max-width: 100vw; max-height: 100vh; box-sizing: border-box; }
 .modal-backdrop::backdrop { background: rgba(0, 0, 0, .4); }
-.materials-modal-card { width: min(680px, calc(100vw - 32px)); padding: 32px; background: #fff; border-radius: 16px; box-shadow: 0 16px 40px rgba(26, 29, 26, .15); box-sizing: border-box; }
+.materials-modal-card { width: min(680px, calc(100vw - 32px)); min-height: min(85vh, 800px); max-height: calc(100vh - 48px); overflow-y: auto; padding: 32px; background: #fff; border-radius: 16px; box-shadow: 0 16px 40px rgba(26, 29, 26, .15); box-sizing: border-box; display: flex; flex-direction: column; }
 .header-row, .title-group, .action-group { display: flex; align-items: center; }
 .header-row { justify-content: space-between; }
 .title-group { gap: 10px; }
@@ -322,7 +496,7 @@ function blockInvalidNumberChars(e: KeyboardEvent) {
 .message-field { margin-top: 16px; }
 .field-label { color: #1a1d1a; font-size: 13px; font-weight: 700; }
 .input-box { width: 100%; padding: 11px 12px; border: 1px solid #d9ded7; border-radius: 8px; background: #fff; color: #1a1d1a; font: inherit; box-sizing: border-box; }
-.action-group { gap: 12px; margin-top: 24px; }
+.action-group { gap: 12px; margin-top: auto; padding-top: 24px; }
 .btn-submit, .btn-cancel { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 16px; border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer; }
 .btn-submit { border: 1px solid #778732; background: #778732; color: #fff; }
 .btn-cancel { border: 1px solid #d9ded7; background: #fff; color: #1a1d1a; }
@@ -369,6 +543,38 @@ function blockInvalidNumberChars(e: KeyboardEvent) {
   font-size: 12px;
   font-weight: 600;
   color: #3f473d;
+}
+
+.map-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.map-hint-text {
+  font-size: 11px;
+  color: #697067;
+  font-weight: 500;
+}
+
+.coords-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: #778732;
+  background: #f0f4ea;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.handover-map-preview {
+  width: 100%;
+  height: 240px;
+  border-radius: 8px;
+  border: 1px solid #d9ded7;
+  margin-top: 8px;
+  overflow: hidden;
+  background: #eaebec;
 }
 </style>
 

@@ -52,8 +52,11 @@ async function fetchPostDetails() {
         *,
         author:profiles!author_id (
           full_name,
+          is_org,
+          organization_id,
           created_at,
-          profile_data ( Avatar, about, "Posts", "CommunityScore" )
+          profile_data ( Avatar, about, "Posts", "CommunityScore" ),
+          organizations!organization_id ( verification_status )
         ),
         post_images ( image_url, display_order )
       `)
@@ -73,13 +76,21 @@ async function fetchPostDetails() {
       ? authorRecord.profile_data[0]
       : authorRecord?.profile_data
 
+    let isVerified = false
+    if (authorRecord?.is_org && authorRecord?.organizations) {
+      const org = Array.isArray(authorRecord.organizations) ? authorRecord.organizations[0] : authorRecord.organizations
+      if (org?.verification_status === 'verified') isVerified = true
+    }
+
     post.value = {
       ...rawData,
       author: {
         ...authorRecord,
         full_name: authorRecord?.full_name || 'Unknown User',
         Avatar: profileRecord?.Avatar || 'https://placehold.co/38x38',
-        about: profileRecord?.about || 'No bio available.'
+        about: profileRecord?.about || 'No bio available.',
+        is_org: Boolean(authorRecord?.is_org),
+        is_verified: isVerified
       }
     }
   } catch (err: any) {
@@ -230,7 +241,9 @@ const authorProfile = computed(() => {
     bio: post.value.author.about,
     postCount: authorPostCount.value,
     communityScore: profileRecord?.CommunityScore || 0.0,
-    joinedYear: joinedYear
+    joinedYear: joinedYear,
+    is_org: post.value.author.is_org,
+    is_verified: post.value.author.is_verified
   }
 })
 

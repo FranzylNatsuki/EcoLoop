@@ -2,16 +2,27 @@ import { ref } from 'vue'
 
 const selectedSort = ref('New')
 
+export function isItemVerifiedOrg(item: any): boolean {
+  if (!item) return false
+  const target = item.item || item
+  if (target.organizer?.verified === true) return true
+  if (target.author?.is_org && target.author?.is_verified) return true
+  if (target.author?.is_verified === true) return true
+  if (target.is_verified === true) return true
+  return false
+}
+
 export function getHotnessScore(item: any): number {
   if (!item) return 0
   
-  const type = item.type || item.post_type || 'post'
+  const target = item.item || item
+  const type = target.type || target.post_type || 'post'
   
-  const comments = Number(item.comment_count) || 0
-  const votes = Number(item.vote_count) || Number(item.likes_count) || Number(item.upvotes) || 0
-  const rating = Number(item.author?.score) || Number(item.organizer?.score) || 0
-  const fulfillment = Number(item.fulfillment_percent) || 0
-  const followers = Number(item.followers_count) || 0
+  const comments = Number(target.comment_count) || 0
+  const votes = Number(target.vote_count) || Number(target.likes_count) || Number(target.upvotes) || 0
+  const rating = Number(target.author?.score) || Number(target.organizer?.score) || 0
+  const fulfillment = Number(target.fulfillment_percent) || 0
+  const followers = Number(target.followers_count) || 0
   
   let score = 0
   
@@ -31,9 +42,14 @@ export function getHotnessScore(item: any): number {
     score += (fulfillment * 0.3)
     score += (rating * 2)
   }
+
+  // Verified organizations get an extra weight ("not too significant but proves they are more important")
+  if (isItemVerifiedOrg(target)) {
+    score += 15
+  }
   
   // Recent posts get a baseline boost so old 100% filled things aren't glued to the top forever
-  const createdDate = new Date(item.created_at || item.schedule || 0).getTime()
+  const createdDate = new Date(target.created_at || target.schedule || 0).getTime()
   const daysOld = Math.max(0, (Date.now() - createdDate) / (1000 * 60 * 60 * 24))
   const recencyBoost = Math.max(0, 15 - daysOld) // Up to 15 points if brand new
 

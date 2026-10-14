@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { ImagePlus, ShoppingBag, X } from 'lucide-vue-next'
+import { supabase } from '../../composables/useAuth'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -81,6 +82,25 @@ watch(isOpen, async (open) => {
       imagePreviews.value = []
     } else {
       resetForm()
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('address, latitude, longitude')
+            .eq('id', session.user.id)
+            .maybeSingle()
+          if (profile) {
+            if (profile.address && !locationAddress.value) locationAddress.value = profile.address
+            if (profile.latitude && profile.longitude && !latitude.value) {
+              latitude.value = Number(profile.latitude)
+              longitude.value = Number(profile.longitude)
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not prefill user profile location:', err)
+      }
     }
     
     dialogRef.value?.showModal()
