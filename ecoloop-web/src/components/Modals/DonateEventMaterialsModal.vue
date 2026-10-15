@@ -264,14 +264,27 @@ async function handleSubmit() {
 
     if (itemsError) throw new Error(itemsError.message)
 
-    // 5. Upload Images (but don't insert into pledge_images as it conflicts with cause_requests)
+    // 5. Upload Images & record them in event_pledge_images
     for (const file of imageFiles.value) {
       const fileExt = file.name.split('.').pop()
       const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`
       const filePath = `pledge-images/${fileName}`
 
-      // We still upload to storage, but skip inserting to DB since event_pledge_images doesn't exist
-      await supabase.storage.from('images').upload(filePath, file)
+      const { error: uploadError } = await supabase.storage.from('images').upload(filePath, file)
+      if (uploadError) {
+        console.error('Event pledge image upload failed:', uploadError.message)
+        continue
+      }
+
+      const { data: urlData } = supabase.storage.from('images').getPublicUrl(filePath)
+      const { error: imageInsertError } = await supabase.from('event_pledge_images').insert({
+        event_pledge_id: pledge.id,
+        image_url: urlData.publicUrl,
+        display_order: 99
+      })
+      if (imageInsertError) {
+        console.error('Failed to save event pledge image record:', imageInsertError.message)
+      }
     }
 
     const totalQty = validItems.reduce((acc, curr) => acc + curr.quantity, 0)

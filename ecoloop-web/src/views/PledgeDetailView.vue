@@ -106,6 +106,17 @@ const fetchPledgeDetails = async (id: string) => {
     if (fetchedData) {
       if (Array.isArray(fetchedData.post)) fetchedData.post = fetchedData.post[0]
       if (Array.isArray(fetchedData.donor)) fetchedData.donor = fetchedData.donor[0]
+
+      // Event pledges store photos in event_pledge_images (fetched separately so errors don't break the page)
+      if (fetchedData.event_id && !fetchedData.images) {
+        const { data: eventImages, error: eventImagesError } = await supabase
+          .from('event_pledge_images')
+          .select('image_url')
+          .eq('event_pledge_id', fetchedData.id)
+          .order('display_order', { ascending: true })
+        if (eventImagesError) console.error('Failed to load event pledge images:', eventImagesError.message)
+        fetchedData.images = eventImages || []
+      }
     }
     pledge.value = fetchedData
 

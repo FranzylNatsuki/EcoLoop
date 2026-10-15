@@ -261,10 +261,15 @@ watch(
         <div v-if="eventDetail.organizer" class="card organizer-card">
           <h4>Campaign Organizer</h4>
           <div class="organizer-info">
-            <img :src="eventDetail.organizer.avatar" :alt="eventDetail.organizer.name" class="organizer-avatar" />
+            <component :is="eventDetail.author_id ? 'RouterLink' : 'span'" :to="eventDetail.author_id ? `/user/${eventDetail.author_id}` : undefined">
+              <img :src="eventDetail.organizer.avatar" :alt="eventDetail.organizer.name" class="organizer-avatar" />
+            </component>
             <div>
               <strong style="display: flex; align-items: center; gap: 4px;">
-                {{ eventDetail.organizer.name }}
+                <RouterLink v-if="eventDetail.author_id" :to="`/user/${eventDetail.author_id}`" class="profile-name-link">
+                  {{ eventDetail.organizer.name }}
+                </RouterLink>
+                <template v-else>{{ eventDetail.organizer.name }}</template>
                 <BadgeCheck v-if="eventDetail.organizer.verified" fill="#3B82F6" color="white" :size="18" />
               </strong>
               <p v-if="eventDetail.organizer.bio" class="organizer-bio">{{ eventDetail.organizer.bio }}</p>
@@ -474,4 +479,6 @@ watch(
   cursor: pointer;
   font-weight: 600;
 }
+.profile-name-link { color: inherit; text-decoration: none; }
+.profile-name-link:hover { color: #778732; text-decoration: underline; }
 </style>

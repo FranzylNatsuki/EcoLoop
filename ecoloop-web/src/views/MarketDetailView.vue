@@ -1219,14 +1219,30 @@ async function handleShare() {
         <div class="modal-body">
           <!-- Buyer Header -->
           <div class="buyer-profile-header">
+            <RouterLink v-if="selectedRequest.buyer_id" :to="`/user/${selectedRequest.buyer_id}`" @click="selectedRequest = null">
+              <img
+                :src="selectedRequest.buyer?.avatar_url || 'https://placehold.co/48x48'"
+                alt="Buyer avatar"
+                class="modal-avatar"
+              />
+            </RouterLink>
             <img
+              v-else
               :src="selectedRequest.buyer?.avatar_url || 'https://placehold.co/48x48'"
               alt="Buyer avatar"
               class="modal-avatar"
             />
             <div>
               <div class="user-name-row">
-                <h3>{{ selectedRequest.buyer?.full_name || selectedRequest.buyer?.username || 'Unknown User' }}</h3>
+                <h3>
+                  <RouterLink
+                    v-if="selectedRequest.buyer_id"
+                    :to="`/user/${selectedRequest.buyer_id}`"
+                    class="profile-name-link"
+                    @click="selectedRequest = null"
+                  >{{ selectedRequest.buyer?.full_name || selectedRequest.buyer?.username || 'Unknown User' }}</RouterLink>
+                  <template v-else>{{ selectedRequest.buyer?.full_name || selectedRequest.buyer?.username || 'Unknown User' }}</template>
+                </h3>
                 <div class="user-rating" v-if="selectedRequest.buyer?.score !== undefined">
                   ⭐ {{ selectedRequest.buyer.score.toFixed(1) }}
                 </div>
@@ -1900,4 +1916,6 @@ h1 { margin: 8px 0; color: #1a1d1a; }
   .listing-header { flex-direction: column; }
   .buy-button { width: 100%; }
 }
+.profile-name-link { color: inherit; text-decoration: none; }
+.profile-name-link:hover { color: #778732; text-decoration: underline; }
 </style>
